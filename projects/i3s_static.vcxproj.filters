@@ -1,0 +1,320 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\i3s">
+      <UniqueIdentifier>{9c753ba6-707e-484e-82a1-58f611a5dc27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\utils">
+      <UniqueIdentifier>{eb734461-b829-4a22-9611-cea4ebe0701f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\i3s">
+      <UniqueIdentifier>{63e81ad7-6250-43f1-9210-8776ec8d4860}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utils">
+      <UniqueIdentifier>{11fb6d6d-d9b4-442c-99fc-843044fbde73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utils\win">
+      <UniqueIdentifier>{dc10a9a7-f414-469c-abba-fb4dfc992232}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utils\dxt">
+      <UniqueIdentifier>{2f916ff2-883b-4f34-8a6e-26f7e193e7d6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\utils\json">
+      <UniqueIdentifier>{efc4817e-8bfe-4125-b8bc-8b1974a62e51}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\i3s\i3s_common.h">
+      <Filter>Header Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\i3s\i3s_enums.h">
+      <Filter>Header Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\i3s\i3s_enums_generated.h">
+      <Filter>Header Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\i3s\i3s_writer.h">
+      <Filter>Header Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_basic_tracker_api.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_buffer.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_declptr.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_geom.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_i3s_export.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_jpeg.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_png.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_string.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_writer_impl.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\json\json.h">
+      <Filter>Source Files\utils\json</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\json\json-forwards.h">
+      <Filter>Source Files\utils\json</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\win\utl_windows.h">
+      <Filter>Source Files\utils\win</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\dxt\dds.h">
+      <Filter>Source Files\utils\dxt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\dxt\IntelDXTCompressor.h">
+      <Filter>Source Files\utils\dxt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\dxt\utl_dxt_config.h">
+      <Filter>Source Files\utils\dxt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\dxt\utl_dxt_mipmap_dds.h">
+      <Filter>Source Files\utils\dxt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_base64.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\pch.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_libdraco_api.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_endian.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_etc2comp_c_api.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_i3s_assert.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_i3s_resource_defines.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_image_resize.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_common_.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_index_dom.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_layer_dom.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_legacy_mesh.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_legacy_shared_dom.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_material_dom.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_mesh_dom.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_bitstream.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_box.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_bvh.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_colors.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_crc32.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_fs.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_geographic.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_image_2d.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_io.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_json_helper.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_lock.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_mbs.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_md5.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_mime.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_obb.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_platform_def.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_prohull.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_quaternion.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_serialize.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_serialize_json.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_serialize_json_dom.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_slpk_writer_api.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_spatial_reference.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_variant.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_zip_archive_impl.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\i3s\i3s_context_impl.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_enums_generated.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_layer_dom.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_legacy_mesh.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_writer_impl.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_buffer.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_bvh.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_colors.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_fs.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_gzip.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_image_2d.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_jpeg.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_obb.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_png.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_serialize_json.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_serialize_json_dom.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_slpk_writer_impl.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_string.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_variant.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_zip_archive_impl.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\json\jsoncpp.cpp">
+      <Filter>Source Files\utils\json</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\dxt\IntelDXTCompressor.cpp">
+      <Filter>Source Files\utils\dxt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\dxt\utl_dxt_mipmap_dds.cpp">
+      <Filter>Source Files\utils\dxt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_mime.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_base64.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\pch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_libdraco_api.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_md5.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_resource_strings.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_image_resize.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_quaternion.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\src\utils\utl_resource_strings.inc">
+      <Filter>Source Files\utils</Filter>
+    </None>
+  </ItemGroup>
+</Project>
