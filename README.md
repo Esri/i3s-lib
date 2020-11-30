@@ -2,7 +2,7 @@
 
 A C++ library for producing [Scene Layer Package](https://github.com/Esri/i3s-spec) (SLPK) files.
 Currently it does not provide reading / validating capabilities, this is planned for the future.
-For a test program please see [here](https://devtopia.esri.com/3rdparty/scene-layer-lib/tree/vla96772/i3s_sdk_14/sdk/test/demo).
+For a test program please see [here](examples/raster2slpk).
 
 ## Features
 -Create SLPK from elevation image(PNG) and color image(PNG)
