@@ -1,0 +1,38 @@
+name: Ubuntu 18.04 Build
+
+on:
+  push:
+    paths:
+      - '**'
+
+jobs:
+  build_ubuntu:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Setup cmake
+      uses: jwlawson/actions-setup-cmake@v1.8
+      with:
+        cmake-version: '3.19.x'
+    - name: Use cmake
+      run: cmake --version
+    - name: Use GCC
+      run: gcc-8 --version
+    - name: Build 3rd party
+      run: |
+        mkdir -p build/3rdparty
+        cd build/3rdparty
+        cmake ../../projects/3rdparty -DCMAKE_CXX_COMPILER=/usr/bin/g++-8
+        cmake --build .
+    - name: Build i3s lib
+      run: |
+        cd build
+        cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++-8
+        cmake --build .
+    - name: Run Raster2Slpk Sample
+      run: |
+        cd build
+        ./raster2slpk --help || true
