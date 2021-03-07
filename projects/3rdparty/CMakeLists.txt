@@ -188,14 +188,15 @@ endif()
 #FastOBJ is a C,header only library making meshes and uv co-ordinates
 #available as a struct. These can be consumed by obj2slpk and exported
 #in an SLPK format
+set(LIBFASTOBJ_DIR ${THIRD_PARTY_DIR}/fastobj)
+
 ExternalProject_Add(fastobj
   PREFIX fastobj
   GIT_REPOSITORY https://github.com/thisistherk/fast_obj
   GIT_PROGRESS ${GIT_PROGRESS}
+  INSTALL_DIR ${LIBFASTOBJ_DIR}
   INSTALL_COMMAND ""
 )
-
-copy_to_3rdparty(fastobj FALSE FALSE)
 
 #
 project(i3s_3rdparty)
