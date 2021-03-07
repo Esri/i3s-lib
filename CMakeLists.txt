@@ -174,3 +174,15 @@ endif()
 target_include_directories(raster2slpk PRIVATE include) 
 
 target_link_libraries(raster2slpk i3s)
+
+# obj2slpk example app target
+set(OBJ2SLPK_SOURCES "examples/obj2slpk/main.cpp")
+add_executable(obj2slpk ${OBJ2SLPK_SOURCES})
+
+if(WIN32)
+  target_compile_definitions(obj2slpk PRIVATE -D_UNICODE -DUNICODE)
+endif()
+
+target_include_directories(obj2slpk PRIVATE include) 
+
+target_link_libraries(obj2slpk i3s)
