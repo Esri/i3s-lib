@@ -15,7 +15,11 @@ email: tisham@whanick.com
 */
 
 #include "i3s/i3s_writer.h"
+#include "fastobj/fast_obj.h"
 #include <iostream>
+
+#include <filesystem>
+namespace stdfs = std::filesystem;
 
 int main(int argc, char* argv[])
 {
@@ -26,4 +30,15 @@ int main(int argc, char* argv[])
 
     return 1;
   }
+
+  const stdfs::path full_res_obj_path(argv[1]);
+  const stdfs::path lod1_obj_path(argv[2]);
+  const stdfs::path lod2_obj_path(argv[3]);
+  const stdfs::path slpk_file_path(argv[4]);
+
+  // Read the source obj files into structs, this is memory intensive
+  fastObjMesh* mesh_full = fast_obj_read(full_res_obj_path.c_str());
+  fastObjMesh* mesh_lod_1 = fast_obj_read(lod1_obj_path.c_str());
+  fastObjMesh* mesh_lod_2 = fast_obj_read(lod2_obj_path.c_str());
+
 }

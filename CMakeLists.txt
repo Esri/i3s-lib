@@ -35,6 +35,7 @@ project(i3s)
 #set(CMAKE_VERBOSE_MAKEFILE ON CACHE BOOL "Verbose build output" FORCE)
 
 set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/3rdparty) 
+set(SRC_THIRD_PARTY_DIR ${PROJECT_BINARY_DIR}/3rdparty/) 
 
 set(I3SLIB_SOURCES
   src/i3s/i3s_context_impl.cpp
@@ -171,18 +172,21 @@ if(WIN32)
   target_compile_definitions(raster2slpk PRIVATE -D_UNICODE -DUNICODE)
 endif()
 
-target_include_directories(raster2slpk PRIVATE include) 
+target_include_directories(raster2slpk PRIVATE include)
 
 target_link_libraries(raster2slpk i3s)
 
 # obj2slpk example app target
 set(OBJ2SLPK_SOURCES "examples/obj2slpk/main.cpp")
-add_executable(obj2slpk ${OBJ2SLPK_SOURCES})
+set(FASTOBJ_SOURCES ${SRC_THIRD_PARTY_DIR}/fastobj/src/fastobj/fast_obj.c)
+add_executable(obj2slpk ${OBJ2SLPK_SOURCES} ${FASTOBJ_SOURCES})
 
 if(WIN32)
   target_compile_definitions(obj2slpk PRIVATE -D_UNICODE -DUNICODE)
 endif()
 
-target_include_directories(obj2slpk PRIVATE include) 
+target_include_directories(obj2slpk PRIVATE 
+  include
+  ${SRC_THIRD_PARTY_DIR}/fastobj/src/)
 
 target_link_libraries(obj2slpk i3s)
