@@ -23,10 +23,10 @@ namespace stdfs = std::filesystem;
 
 int main(int argc, char* argv[])
 {
-  if (argc != 5)
+  if (argc != 6)
   {
     std::cout << "Usage:" << std::endl
-      << "obj2slpk <full_res_obj> <lod1_obj> <lod2_obj> <output_slpk_file>" << std::endl;
+      << "obj2slpk <full_res_obj> <lod1_obj> <lod2_obj> <ref_xml> <output_slpk_file>" << std::endl;
 
     return 1;
   }
@@ -34,7 +34,8 @@ int main(int argc, char* argv[])
   const stdfs::path full_res_obj_path(argv[1]);
   const stdfs::path lod1_obj_path(argv[2]);
   const stdfs::path lod2_obj_path(argv[3]);
-  const stdfs::path slpk_file_path(argv[4]);
+  const stdfs::path reference_xml(argv[4]);
+  const stdfs::path slpk_file_path(argv[5]);
 
   // Read the source obj files into structs, this is memory intensive
   fastObjMesh* mesh_full = fast_obj_read(full_res_obj_path.c_str());
