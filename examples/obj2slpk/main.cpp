@@ -21,6 +21,30 @@ email: tisham@whanick.com
 #include <filesystem>
 namespace stdfs = std::filesystem;
 
+i3slib::i3s::Layer_writer::Var create_writer(const stdfs::path& slpk_path)
+{
+  i3slib::i3s::Ctx_properties ctx_props;
+  // OBJ's will require Geometry/Texture compression in the writer
+  i3slib::i3s::set_geom_compression(ctx_props.geom_encoding_support, i3slib::i3s::Geometry_compression::Draco, true);
+  i3slib::i3s::set_gpu_compression(ctx_props.gpu_tex_encoding_support, i3slib::i3s::GPU_texture_compression::ETC_2, true);
+  auto writer_context = i3slib::i3s::create_i3s_writer_context(ctx_props);
+
+  i3slib::i3s::Layer_meta meta;
+  meta.type = i3slib::i3s::Layer_type::Mesh_IM;
+  meta.name = slpk_path.stem().u8string();
+  meta.desc = "Generated with obj2slpk";
+  meta.sr.wkid = 4326;
+  meta.uid = meta.name;
+  meta.normal_reference_frame = i3slib::i3s::Normal_reference_frame::Not_set;
+
+  std::unique_ptr<i3slib::i3s::Layer_writer> writer(
+    i3slib::i3s::create_mesh_layer_builder(writer_context, slpk_path));
+
+  if (writer)
+    writer->set_layer_meta(meta);
+  return writer;
+}
+
 int main(int argc, char* argv[])
 {
   if (argc != 6)
@@ -42,4 +66,7 @@ int main(int argc, char* argv[])
   fastObjMesh* mesh_lod_1 = fast_obj_read(lod1_obj_path.c_str());
   fastObjMesh* mesh_lod_2 = fast_obj_read(lod2_obj_path.c_str());
 
+  auto writer = create_writer(slpk_file_path);
+  if (!writer)
+    return 1;
 }
