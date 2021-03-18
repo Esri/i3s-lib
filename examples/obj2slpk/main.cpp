@@ -15,11 +15,30 @@ email: tisham@whanick.com
 */
 
 #include "i3s/i3s_writer.h"
+#include "utils/utl_png.h"
+#include "utils/utl_geom.h"
+#include "utils/utl_i3s_resource_defines.h"
 #include "fastobj/fast_obj.h"
 #include <iostream>
+#include <vector>
 
 #include <filesystem>
 namespace stdfs = std::filesystem;
+
+using i3slib::utl::Vec2i;
+using i3slib::utl::Vec2f;
+using i3slib::utl::Vec2d;
+using i3slib::utl::Vec3f;
+using i3slib::utl::Vec3d;
+
+namespace
+{
+
+struct CS_transformation
+{
+  DECL_PTR(CS_transformation);
+  virtual bool transform(Vec3d* points, size_t count) = 0;
+};
 
 i3slib::i3s::Layer_writer::Var create_writer(const stdfs::path& slpk_path)
 {
@@ -43,6 +62,40 @@ i3slib::i3s::Layer_writer::Var create_writer(const stdfs::path& slpk_path)
   if (writer)
     writer->set_layer_meta(meta);
   return writer;
+}
+
+// Recursive node addition function for various LOD's
+bool process(
+  i3slib::i3s::Layer_writer& writer,
+  CS_transformation* transformation = nullptr)
+{
+  return false;
+}
+
+// OBJ textured mesh to SLPK mesh conversion
+bool build_mesh(
+  const i3slib::i3s::Layer_writer& writer,
+  i3slib::i3s::Mesh_data& mesh,
+  fastObjMesh* mesh_lod,
+  CS_transformation* transformation = nullptr
+)
+{
+  // TODO: Load vertices from mesh struct
+  // TODO: Load MTL + Textures from mesh struct
+  // TODO: Load UV from mesh struct
+  // TODO: Reproject vertices via ENU transform as necessary
+  // TODO: Add vertices to raw_mesh
+  // TODO: Add UV's to raw mesh
+  // TODO: Assign n-textures from OBJ to raw mesh
+  // TODO: Attach raw mesh to writer
+
+  std::vector<Vec3d> verts;
+  std::vector<Vec2f> uvs;
+  i3slib::i3s::Simple_raw_mesh raw_mesh;
+
+  return false;
+}
+
 }
 
 int main(int argc, char* argv[])
