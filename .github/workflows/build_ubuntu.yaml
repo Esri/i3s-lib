@@ -36,3 +36,7 @@ jobs:
       run: |
         cd build
         ./raster2slpk --help || true
+    - name: Run Obj2Slpk Sample
+      run: |
+        cd build
+        ./obj2slpk --help || true
