@@ -22,6 +22,7 @@ email: contracts@esri.com
 #include "utils/utl_colors.h"
 #include <stdint.h>
 #include <cstring>
+
 #include <iostream>
 #include <sstream>
 #include <stdio.h>
@@ -574,7 +575,7 @@ int fopen(FILE*& file, const std::filesystem::path& file_name, const std::string
 class Png_writer_impl
 {
 public:
-  Png_writer_impl() : m_file(nullptr) {}
+  Png_writer_impl() = default;
   ~Png_writer_impl() { if (m_file) _finalize_write(); }
   bool create_rgba32(const std::filesystem::path& fn, int w, int h);
 
@@ -585,11 +586,12 @@ public:
 private:
   bool      _finalize_write();
 
-  FILE* m_file;
-  int         m_w, m_h;
-  int         m_y0;
-  png_struct_def* m_png_ptr;
-  png_infop m_info_ptr;
+  FILE* m_file = nullptr;
+  int m_w = 0;
+  int m_h = 0;
+  int m_y0 = 0;
+  png_struct_def* m_png_ptr = nullptr;
+  png_infop m_info_ptr = nullptr;
 };
 
 //! Creates RGBA 8bits per channel PNG file:
@@ -601,7 +603,8 @@ bool Png_writer_impl::create_rgba32(const std::filesystem::path& file_name, int 
   auto err = fopen(m_file, file_name, "wb");
   if (err)
   {
-    std::cerr << "PngWriter::CreateRGBA32(): failed to create file " << file_name.c_str() << "\n";
+    std::wcerr << L"PngWriter::CreateRGBA32(): failed to create file " 
+      << file_name.generic_wstring() << "\n";
     return false;
   }
   m_png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -752,6 +755,73 @@ void png_test()
 }
 
 }  //endof ::test
+
+namespace
+{
+
+struct Png_write_struct_deleter
+{
+  void operator()(png_structp png_write_struct) const
+  {
+    png_destroy_write_struct(&png_write_struct, NULL);
+  }
+};
+
+struct Png_info_struct_deleter
+{
+  explicit Png_info_struct_deleter(png_structp png_write_struct) :
+    m_png_write_struct(png_write_struct)
+  {}
+
+  void operator()(png_infop png_info_struct) const
+  {
+    png_destroy_info_struct(m_png_write_struct, &png_info_struct);
+  }
+
+private:
+  png_structp m_png_write_struct = nullptr;
+};
+
+}
+
+I3S_EXPORT bool encode_png(const uint8_t* raw_bytes, int w, int h, bool has_alpha, std::vector<uint8_t>& png_bytes)
+{
+  png_bytes.clear();
+
+  std::unique_ptr<png_struct, Png_write_struct_deleter> png(
+    png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL));
+
+  std::unique_ptr<png_info, Png_info_struct_deleter> info(
+    png_create_info_struct(png.get()), Png_info_struct_deleter(png.get()));
+
+  std::vector<png_bytep> rows(h);
+  {
+    uint8_t* row = const_cast<uint8_t*>(raw_bytes);
+    const auto stride = w * (has_alpha ? 4 : 3);
+    for (size_t i = 0; i < static_cast<size_t>(h); i++, row += stride)
+      rows[i] = reinterpret_cast<png_bytep>(row);
+  }
+
+  const auto write_callback = [](png_structp png, png_bytep bytes, png_size_t count)
+  {
+    auto& v = *reinterpret_cast<std::vector<uint8_t>*>(png_get_io_ptr(png));
+    const auto* b = reinterpret_cast<uint8_t*>(bytes);
+    v.insert(v.end(), b, b + count);
+  };
+
+  // You probably should not declare any C++ objects after the setjump. 
+  if (setjmp(png_jmpbuf(png.get())))
+    return false;
+
+  png_set_IHDR(png.get(), info.get(), w, h, 8,
+    has_alpha ? PNG_COLOR_TYPE_RGBA : PNG_COLOR_TYPE_RGB,
+    PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+
+  png_set_rows(png.get(), info.get(), rows.data());
+  png_set_write_fn(png.get(), &png_bytes, write_callback, NULL);
+  png_write_png(png.get(), info.get(), PNG_TRANSFORM_IDENTITY, NULL);
+  return true;
+}
 
 } // namespace utl
 

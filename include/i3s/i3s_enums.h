@@ -33,6 +33,8 @@ namespace i3slib
 
 namespace i3s
 {
+  // We need the struct until all compilers support https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2022/p2593r0.html
+  template<class T> struct dependent_false : std::false_type {};
 
 enum class  Alpha_mode : int {
   Opaque = 0, 
@@ -70,6 +72,13 @@ enum class Type : int {
   _count = Not_set
 };
 
+enum class Domain_type : int {
+  CodedValue = 0,// => codedValue
+  Range,// => range
+  Not_set,
+  _count = Not_set
+};
+
 enum class Esri_field_type : int {
   Date = 0,// => esriFieldTypeDate
   Single,// => esriFieldTypeSingle
@@ -84,6 +93,15 @@ enum class Esri_field_type : int {
   Not_set ,
   _count=Not_set
 };
+
+
+enum class Key_value_encoding_type : int {
+  Separated_key_values, // => SeparatedKeyValues
+
+  Not_set,
+  _count = Not_set
+};
+
 
 enum class Legacy_topology : int { 
   Per_attribute_array = 0, // => PerAttributeArray
@@ -141,7 +159,8 @@ enum class Layer_type :int {
   Building, // => Building
   Voxel, // => Voxel
   Group, // => group
-  _count 
+  Not_set,
+  _count = Not_set
 };
 
 enum class VB_Binding :int { 
@@ -211,7 +230,7 @@ enum class Compressed_geometry_format : int {
 
 enum class Legacy_image_channel : int {
   Rgba = 0,
-  Rgb,
+  Rgb, // => rgb => 
   Not_set,
   _count = Not_set
 };
@@ -228,6 +247,8 @@ enum class Mime_image_format {
   Png, // => image/png => data:image/png
   Dds, // => image/vnd-ms.dds => data:image/vnd-ms.dds
   Ktx, // => image/ktx => data:image/ktx
+  Basis, // => image/basis
+  Ktx2, // => image/ktx2
   Not_set,
   _count = Not_set,
 };
@@ -239,6 +260,12 @@ enum class Legacy_uv_set : int {
 
 enum class Value_encoding : int {
   Utf8, // => UTF-8
+  Not_set,
+  _count = Not_set,
+};
+
+enum class Time_encoding : int {
+  Ecma_iso_8601, // => ECMA_ISO8601
   Not_set,
   _count = Not_set,
 };
@@ -294,7 +321,7 @@ enum class Height_unit : int {
 };
 
 enum class Continuity : int {
-  Contiguous,
+  Continuous,
   Discrete, 
   Not_set,
   _count = Not_set
@@ -309,12 +336,6 @@ enum class Base_quantity : int {
   _count = Not_set
 };
 
-enum class Statistics_status : int { 
-  Final,
-  Partial, 
-  Not_set,
-  _count = Not_set
-};
 
 /*
 // keeping these Height_units here in case they're needed in the future
@@ -395,6 +416,58 @@ enum class Vertical_exag_mode : int {
   _count = Not_set 
 };
 
+enum class Rendering_quality : int {
+  Low = 0, 
+  Medium, 
+  High, 
+  Custom
+};
+
+enum class Interpolation : int {
+  Linear = 0, 
+  Nearest, 
+  Not_set 
+};
+enum class Vxl_render_mode : int {
+  Volume, 
+  Surfaces
+};
+
+enum class Vxl_rw_stats_status : int {
+  Partial = 0,
+  Final,
+  Not_set, 
+};
+
+
+
+/*
+* If the client has enough resources to do so, it could chose to show more details for high priority content.
+*/
+enum class Priority : int {
+  High,  // => High
+  Low  // => Low
+};
+
+
+/*
+* For Semantic::Labels, the client is not allowed to scale the LoD metrics
+*/
+enum class Semantic : int {
+  None,  // => None
+  Labels // => Labels
+};
+
+constexpr Priority c_default_priority{ Priority::High };
+constexpr Semantic c_default_semantic{ Semantic::None };
+
+enum class Capability : int {
+  View, // => View
+  Query, // => Query
+  Edit, // => Edit
+  Extract, // => Extract
+};
+
 } // namespace i3s
 
 namespace utl
@@ -405,7 +478,7 @@ class Archive_out;
 
 namespace i3s
 {
-#include "i3s_enums_generated.h"
+#include "i3s/i3s_enums_generated.h"
 }
 
 } // namespace i3slib

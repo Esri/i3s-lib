@@ -21,6 +21,7 @@ email: contracts@esri.com
 #include "utils/utl_serialize.h"
 #include "utils/utl_geom.h"
 #include <vector>
+#include <utility>
 
 namespace i3slib
 {
@@ -36,7 +37,7 @@ struct I3S_EXPORT Obb_abs
 {
   SERIALIZABLE(Obb_abs);
 
-  Obb_abs() { extents.x = std::numeric_limits< float >::max(); }
+  Obb_abs() { extents.x = (std::numeric_limits<float>::max)(); }
 
   Obb_abs( const Vec3d& c, const Vec3f& e, const Vec4d& o = { 0.0, 0.0, 0.0, 1.0 }) :
     center(c), extents(e), orientation(o) {} 
@@ -45,7 +46,7 @@ struct I3S_EXPORT Obb_abs
 
   template<typename Ar> void serialize(Ar& ar);
 
-  bool  is_valid() const { return  extents.x != std::numeric_limits< float >::max() && extents != Vec3f(0.0); }
+  bool  is_valid() const { return  extents.x != (std::numeric_limits<float>::max)() && extents != Vec3f(0.0); }
   bool  is_empty() const { return extents.x <= 0.0f || extents.y <= 0.0f || extents.z <= 0.0f; }
   float radius() const   { return extents.length(); }
 
@@ -57,8 +58,18 @@ struct I3S_EXPORT Obb_abs
   void get_transform_matrix(Mat4d& mat) const;
 
   Vec3d axis_z() const;
+  // N.B.: the predicates/functions below are very inefficient for multiple point testing scenario
+  bool contains(const Vec3d& point) const; 
+  double get_squared_distance_to(const Vec3d& point) const;
+  double get_distance_to(const Vec3d& point) const
+  {
+    return std::sqrt(get_squared_distance_to(point));
+  }
+  std::pair<double, double> get_minmax_squared_distance_to(const Vec3d& point) const;
 
-  bool contains(const Vec3d& point) const;
+
+  bool contains(const Obb_abs& obb) const;
+  bool intersects(const Obb_abs& obb) const;
 
   // count should always be set to 8.
   // corner order is (--+)(+-+)(+++)(-++)(---)(+--)(++-)(-+-)
@@ -108,7 +119,7 @@ public:
   void init(const Vec4d& quaternion)
   {
     quaternion_ = quaternion;
-    min_ = Vec3d(std::numeric_limits<double>::max());
+    min_ = Vec3d((std::numeric_limits<double>::max)());
     max_ = Vec3d(std::numeric_limits<double>::lowest());
   }
 

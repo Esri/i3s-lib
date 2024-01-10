@@ -22,13 +22,14 @@ email: contracts@esri.com
 #include <numeric>
 #include <vector>
 #include <memory>
-#include <iostream>
+
 #include <fstream>
 #include <stdint.h>
 #include "utils/utl_geom.h"
 #include "utils/utl_prohull.h"
 #include "utils/utl_bvh.h"
 #include "utils/utl_quaternion.h"
+#include "utils/utl_i3s_assert.h"
 
 // -----------------------------------
 
@@ -420,15 +421,11 @@ where f = (1 + √5) / 2 is the golden ratio
   //--------------------------------------------------------------------------------------------------------------------
 
   Pro_hull::Pro_hull(const Pro_set* proset)
+    : m_base(proset)
+    , m_promin(proset->base_vector_size, std::numeric_limits<double>::max())
+    , m_promax(proset->base_vector_size, std::numeric_limits<double>::lowest())
+    , m_provertex(2 * proset->base_vector_size)
   {
-    m_base = proset;
-    m_promin.resize(m_base->base_vector_size);
-    m_promax.resize(m_base->base_vector_size);
-    m_provertex.resize(2 * m_base->base_vector_size);
-    for (int i = 0; i < m_base->base_vector_size; i++) {
-      m_promin[i] = std::numeric_limits< double >::max();
-      m_promax[i] = -std::numeric_limits< double >::max();
-    }
   }
 
   Pro_hull::Pro_hull(const Pro_set* proset, const Vec3d& vector)
@@ -441,6 +438,13 @@ where f = (1 + √5) / 2 is the golden ratio
       m_provertex[2 * i] = vector;
       m_provertex[2 * i + 1] = vector;
     }
+  }
+
+  void Pro_hull::clear()
+  {
+    std::fill(m_promin.begin(), m_promin.end(), std::numeric_limits< double >::max());
+    std::fill(m_promax.begin(), m_promax.end(), std::numeric_limits< double >::lowest());
+    std::fill(m_provertex.begin(), m_provertex.end(), Vec3d{});
   }
 
   double Pro_hull::center(int dir) const {                  // middle value of projection for a direction
@@ -499,7 +503,7 @@ where f = (1 + √5) / 2 is the golden ratio
   // find a dimension having least square diameter of hull projection along this axis
   int Pro_hull::principal_dimension_pca() const {
 
-    double mindiam = std::numeric_limits< double >::max();    // minimal projection diameter
+    double mindiam = std::numeric_limits<double>::max();    // minimal projection diameter
     int principal = 0;
 
     for (int i = 0; i < m_base->base_vector_size; i++) {    // 
@@ -524,7 +528,7 @@ where f = (1 + √5) / 2 is the golden ratio
   // find a dimension having least projection of OBB along this axis
   int Pro_hull::principal_dimension_obb() const {
 
-    double min_face = std::numeric_limits< double >::max();    // minimal projection perimeter
+    double min_face = std::numeric_limits<double>::max();    // minimal projection perimeter
     int principal = 0;
 
     for (int i = 0; i < m_base->base_obb_size; i++) {    // check all OBB
@@ -586,7 +590,7 @@ where f = (1 + √5) / 2 is the golden ratio
 
     int dir_x, dir_y, dir_z;
     double size_x, size_y, size_z, area;
-    double min_area = std::numeric_limits< double >::max();
+    double min_area = std::numeric_limits<double>::max();
 
     for (int i = 0; i < m_base->base_obb_size; i++) {    // check all OBB of a hull
 
@@ -636,7 +640,7 @@ where f = (1 + √5) / 2 is the golden ratio
 
     int dir_x, dir_y, dir_z;   // axis directions of OBB
     double size_x, size_y, size_z, area;
-    double min_area = std::numeric_limits< double >::max();    // minimal projection area
+    double min_area = std::numeric_limits<double>::max();    // minimal projection area
 
     for (int i = 0; i < m_base->base_obb_size; i++) {    // check all OBB of a hull to find the best fit 
       
@@ -672,7 +676,7 @@ where f = (1 + √5) / 2 is the golden ratio
   void Pro_hull::get_bounding_box(Obb_abs& obb, Method method ) const {
 
     int best = 0;    // best box
-    auto min = std::numeric_limits< double >::max();   
+    auto min = std::numeric_limits<double>::max();   
 
     for (int i = 0; i < m_base->base_obb_size; i++)
     {    // check all OBB of a hull to find the best fit 
@@ -749,7 +753,7 @@ where f = (1 + √5) / 2 is the golden ratio
   // roll a plane around vertex with index vindex in x direction with normal y... return index of vertex with a minimal slope
   int Pro_hull::convex_roll(int vindex, Vec3d& x_axis, Vec3d& y_axis) {  // x - roll direction, y - normal  
 
-    double max_proj = -std::numeric_limits< double >::max();
+    double max_proj = std::numeric_limits<double>::lowest();
     double c_eps = 0.000000001;   // tolerance to avoid point clusters 
     int max_vertex = vindex;
     Vec3d base = m_provertex[vindex];      // a convexoid vertex
@@ -771,7 +775,7 @@ where f = (1 + √5) / 2 is the golden ratio
 
   int Pro_hull::convex_vertex_roll(int vindex) {    // find adjacent hull vertex for vertex
 
-    double max_proj = -std::numeric_limits< double >::max();
+    double max_proj = std::numeric_limits<double>::lowest();
     double c_eps = 0.000000001;   // tolerance to avoid point clusters 
     int max_vertex = vindex;
     Vec3d base = m_provertex[vindex];      // a convexoid vertex
@@ -843,8 +847,8 @@ where f = (1 + √5) / 2 is the golden ratio
   // get convexoid slab for a direction
   void Pro_hull::get_extrema( const Vec3d&  dir, double &min_proj, double &max_proj, Vec3d& min_vertex, Vec3d& max_vertex) {
 
-    min_proj = std::numeric_limits< double >::max(), 
-    max_proj = -std::numeric_limits< double >::max();
+    min_proj = std::numeric_limits<double>::max(), 
+    max_proj = std::numeric_limits<double>::lowest();
 
     for (auto& vertex : m_provertex) {
       double proj = dir.dot(vertex);
@@ -860,8 +864,8 @@ where f = (1 + √5) / 2 is the golden ratio
   }
 
   void get_dir_extrema(std::vector<Vec3d>& vertexes, const Vec3d&  dir, double &min_proj, double &max_proj ) {
-    min_proj = std::numeric_limits< double >::max(),
-    max_proj = -std::numeric_limits< double >::max();
+    min_proj = std::numeric_limits<double>::max(),
+    max_proj = std::numeric_limits<double>::lowest();
 
     for (auto& vertex : vertexes) {
       double proj = dir.dot(vertex);
@@ -881,7 +885,7 @@ where f = (1 + √5) / 2 is the golden ratio
     double min, max;
 
     // 2D convexoid base... use 8 uniform directions
-    const double step = 0.125 * 3.141592653589793238463;
+    constexpr double step = 0.125 * c_pi;
     double sins = sin(step), coss = cos(step);
     std::vector<Vec3d> base_8 = { {0., 1., 0.}, { sins, coss, 0. }, { 1., 1., 0. }, { coss, sins, 0. },
                                   {1., 0., 0.}, { coss, -sins, 0. }, {1., -1., 0.}, { sins, coss, 0. }, };
@@ -915,14 +919,14 @@ where f = (1 + √5) / 2 is the golden ratio
     return 0.;
   }
 
-  void extend_obb(const Vec3d* points, int count , Obb_abs& obb, Vec3d* obb_axis ) {
+  void extend_obb(const Vec3d& origin, const Vec3d* points, int count , Obb_abs& obb, Vec3d* obb_axis ) {
 
-    Vec3d min_proj = Vec3d(std::numeric_limits< double >::max(), std::numeric_limits< double >::max(), std::numeric_limits< double >::max());
-    Vec3d max_proj = Vec3d(-std::numeric_limits< double >::max(), -std::numeric_limits< double >::max(), -std::numeric_limits< double >::max());
+    Vec3d min_proj = Vec3d(std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max());
+    Vec3d max_proj = Vec3d(std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest());
     for( int i=0; i < count; ++i)
     {
       for (auto axis = 0; axis < 3; axis++) {
-        double proj = obb_axis[axis].dot(points[i]);
+        double proj = obb_axis[axis].dot(points[i] - origin);
         if (proj < min_proj[axis]) {
           min_proj[axis] = proj;
         }
@@ -932,7 +936,7 @@ where f = (1 + √5) / 2 is the golden ratio
       }
     }
     // calculate OBB center and extents
-    obb.center = 0.5 *((min_proj.x + max_proj.x) * obb_axis[0] + (min_proj.y + max_proj.y) * obb_axis[1] + (min_proj.z + max_proj.z) * obb_axis[2]);
+    obb.center = origin + 0.5 *((min_proj.x + max_proj.x) * obb_axis[0] + (min_proj.y + max_proj.y) * obb_axis[1] + (min_proj.z + max_proj.z) * obb_axis[2]);
     obb.extents = 0.5f * Vec3f((float)(max_proj.x - min_proj.x), (float)(max_proj.y - min_proj.y), (float)(max_proj.z - min_proj.z));
   }
 
@@ -975,14 +979,29 @@ where f = (1 + √5) / 2 is the golden ratio
   //---------------------------------------------------------------------------------------------------------------
   // calculate a ballbox for a convexoid -  a combination of OBB and BS
 
-  void Pro_hull::get_ball_box(const Vec3d* points, int count, Obb_abs& obb, double& radius, Method method) {
+  void Pro_hull::get_ball_box(const Vec3d* points, int count
+    , Obb_abs& obb, double& radius, Method method) {
+    I3S_ASSERT(count > 0);
+    if (count == 0)
+    {
+      obb.center = Vec3d(0.0);
+      obb.orientation = utl::identity_quaternion<double>();
+      obb.extents = Vec3f(std::numeric_limits<float>::max());
+      return;
+    }
 
+    auto origin = std::accumulate(points + 1, points + count, points[0]) * (1.0 / count) ;
+    // reset the Pro_hull
+    std::fill(m_promin.begin(), m_promin.end(), std::numeric_limits<double>::max());
+    std::fill(m_promax.begin(), m_promax.end(), std::numeric_limits<double>::lowest());
+
+    // accumulate relative positions of all of the remaining points
     for (int i = 0; i < count; i++) 
-      add(points[i]);    // insert points into a convexoid
+      add(points[i] - origin);    // insert points into a convexoid
 
     Vec3d min_p, max_p; 
 //    double size_x, size_y, size_z;
-    double value, min2d = std::numeric_limits< double >::max(), min3d = std::numeric_limits< double >::max();
+    double value, min2d = std::numeric_limits<double>::max(), min3d = std::numeric_limits<double>::max();
     Vec3d min_point, max_point, extent; 
     Vec3d min_point2, max_point2;
     Vec3d axis2_x, axis2_y;         // 2D OBB axes
@@ -1028,7 +1047,7 @@ where f = (1 + √5) / 2 is the golden ratio
       // now calculate 2D OBB for projection to this face
       get_projection_fold(face_normal, edge1, fold);  // projection fold for face normal 
 
-      min2d = std::numeric_limits< double >::max();
+      min2d = std::numeric_limits<double>::max();
       for (int j = 0; j < 16; j++) {    // loop aroind 2D convexoid to find 2D OBB
         //  calculate fold edge normal, check that the fold edge is not degenerative  
         Vec3d dir_x = fold[(j+1)%8] - fold[j];
@@ -1036,6 +1055,10 @@ where f = (1 + √5) / 2 is the golden ratio
 
         // set potential x,y box directions 
         Vec3d dir_y = Vec3d::cross(face_normal, dir_x);
+
+        if (dir_y == Vec3d(0, 0, 0)) 
+          continue;
+
         dir_x = Vec3d::cross(dir_y, face_normal);
         dir_x = dir_x.normalized();
         dir_y = dir_y.normalized();
@@ -1067,7 +1090,7 @@ where f = (1 + √5) / 2 is the golden ratio
     }
 
     // now OBB axes are determined, calculate OBB with these axes for the whole point set
-    extend_obb(points, count, obb, obb_axis);
+    extend_obb(origin, points, count, obb, obb_axis);
 
     // calculate a radius of a bounding sphere
     radius = 0.0;
@@ -1140,7 +1163,7 @@ where f = (1 + √5) / 2 is the golden ratio
   int Hierarchy::list_best_match(int list_id) {
 
     int best = 0;
-    double maxsize = std::numeric_limits< double >::max();
+    double maxsize = std::numeric_limits<double>::max();
 
     for (int node = list_id; node; node = hierarchy[node].next) {
       auto size = clusters[hierarchy[node].cluster].size;
@@ -1182,7 +1205,7 @@ where f = (1 + √5) / 2 is the golden ratio
     clusters[new_index].hull.add(clusters[hierarchy[node1].cluster].hull);
     clusters[new_index].hull.add(clusters[hierarchy[node2].cluster].hull);
     clusters[new_index].match = 0;                  // no match
-    clusters[new_index].size = std::numeric_limits< double >::max();    // init distance value
+    clusters[new_index].size = std::numeric_limits<double>::max();    // init distance value
 
     hierarchy[new_index].cluster = new_index;
     hierarchy[new_index].child = node1;
@@ -1265,7 +1288,7 @@ where f = (1 + √5) / 2 is the golden ratio
         auto match = clusters[hierarchy[node].cluster].match;
         if (match == node1 || match == node2) {  
           clusters[hierarchy[node].cluster].match = 0;                  // no match
-          clusters[hierarchy[node].cluster].size = std::numeric_limits< double >::max();  // init distance value
+          clusters[hierarchy[node].cluster].size = std::numeric_limits<double>::max();  // init distance value
           list_node_match(list_id, node);
         }
       }
@@ -1333,7 +1356,7 @@ where f = (1 + √5) / 2 is the golden ratio
     m_impl->clusters[feature_count].hull = Pro_hull(&m_impl->m_base);    // init a prohull 
     m_impl->clusters[feature_count].id = id;                    // save feature id, but not its' geometry
     m_impl->clusters[feature_count].match = 0;                  // no match
-    m_impl->clusters[feature_count].size = std::numeric_limits< double >::max();    // init distance value
+    m_impl->clusters[feature_count].size = std::numeric_limits<double>::max();    // init distance value
 
     for (int i = 0; i < vertices_count; i++) {                  // feed feature vertexes 
       Vec3d point = reinterpret_cast<const Vec3d&>(origin) + Vec3d( reinterpret_cast<const Vec3f&>(vertices[i]) );
@@ -1525,91 +1548,91 @@ namespace utl
 
   }
 
-  void make_feature(const Pro_hull& h, Feature* feature) {   // make ouitput elements from hull
+  //void make_feature(const Pro_hull& h, Feature* feature) {   // make ouitput elements from hull
 
-    I3S_ASSERT(feature);
+  //  I3S_ASSERT(feature);
 
-    int best = 0;    // best box
+  //  int best = 0;    // best box
 
-    int dir_x, dir_y, dir_z;   // axis directions of OBB
-    double size_x, size_y, size_z, area;
-    double min_area = std::numeric_limits< double >::max();    // minimal projection area
+  //  int dir_x, dir_y, dir_z;   // axis directions of OBB
+  //  double size_x, size_y, size_z, area;
+  //  double min_area = std::numeric_limits<double>::max();    // minimal projection area
 
-    for (int i = 0; i < c_base_obb_size; i++) {    // check all OBB of a hull
+  //  for (int i = 0; i < c_base_obb_size; i++) {    // check all OBB of a hull
 
-      dir_x = h.get_base().obb[i].x;
-      dir_y = h.get_base().obb[i].y;
-      dir_z = h.get_base().obb[i].z;
+  //    dir_x = h.get_base().obb[i].x;
+  //    dir_y = h.get_base().obb[i].y;
+  //    dir_z = h.get_base().obb[i].z;
 
-      // common oob extents 
-      size_x = h.get_promax()[dir_x] - h.get_promin()[dir_x];
-      size_y = h.get_promax()[dir_y] - h.get_promin()[dir_y];
-      size_z = h.get_promax()[dir_z] - h.get_promin()[dir_z];
+  //    // common oob extents 
+  //    size_x = h.get_promax()[dir_x] - h.get_promin()[dir_x];
+  //    size_y = h.get_promax()[dir_y] - h.get_promin()[dir_y];
+  //    size_z = h.get_promax()[dir_z] - h.get_promin()[dir_z];
 
-      area = size_x*size_y + size_y*size_z + size_z*size_x;
+  //    area = size_x*size_y + size_y*size_z + size_z*size_x;
 
-      if (area < min_area) {
-        min_area = area;
-        best = i;
-      }
-    }
+  //    if (area < min_area) {
+  //      min_area = area;
+  //      best = i;
+  //    }
+  //  }
 
-    dir_x = h.get_base().obb[best].x;
-    dir_y = h.get_base().obb[best].y;
-    dir_z = h.get_base().obb[best].z;
+  //  dir_x = h.get_base().obb[best].x;
+  //  dir_y = h.get_base().obb[best].y;
+  //  dir_z = h.get_base().obb[best].z;
 
-    feature->origin = 0.5 * (h.get_promax()[dir_x] + h.get_promin()[dir_x]) * h.get_base().dir[dir_x] +
-      0.5 * (h.get_promax()[dir_y] + h.get_promin()[dir_y]) * h.get_base().dir[dir_y] +
-      0.5 * (h.get_promax()[dir_z] + h.get_promin()[dir_z]) * h.get_base().dir[dir_z];
+  //  feature->origin = 0.5 * (h.get_promax()[dir_x] + h.get_promin()[dir_x]) * h.get_base().dir[dir_x] +
+  //    0.5 * (h.get_promax()[dir_y] + h.get_promin()[dir_y]) * h.get_base().dir[dir_y] +
+  //    0.5 * (h.get_promax()[dir_z] + h.get_promin()[dir_z]) * h.get_base().dir[dir_z];
 
-    Vec3f dx, dy, dz;   // extent vectors of OBB
-    dx = static_cast<Vec3f>(0.5 * (h.get_promax()[dir_x] - h.get_promin()[dir_x]) * (h.get_base().dir[dir_x]));
-    dy = static_cast<Vec3f>(0.5 * (h.get_promax()[dir_y] - h.get_promin()[dir_y]) * (h.get_base().dir[dir_y]));
-    dz = static_cast<Vec3f>(0.5 * (h.get_promax()[dir_z] - h.get_promin()[dir_z]) * (h.get_base().dir[dir_z]));
+  //  Vec3f dx, dy, dz;   // extent vectors of OBB
+  //  dx = static_cast<Vec3f>(0.5 * (h.get_promax()[dir_x] - h.get_promin()[dir_x]) * (h.get_base().dir[dir_x]));
+  //  dy = static_cast<Vec3f>(0.5 * (h.get_promax()[dir_y] - h.get_promin()[dir_y]) * (h.get_base().dir[dir_y]));
+  //  dz = static_cast<Vec3f>(0.5 * (h.get_promax()[dir_z] - h.get_promin()[dir_z]) * (h.get_base().dir[dir_z]));
 
-    Vec3f c[8];        // 8 corner vertexes of OBB
+  //  Vec3f c[8];        // 8 corner vertexes of OBB
 
-    c[0] = dx + dy + dz;
-    c[1] = dx + dy - dz;
-    c[2] = dx - dy + dz;
-    c[3] = dx - dy - dz;
-    c[4] = -dx + dy + dz;
-    c[5] = -dx + dy - dz;
-    c[6] = -dx - dy + dz;
-    c[7] = -dx - dy - dz;
+  //  c[0] = dx + dy + dz;
+  //  c[1] = dx + dy - dz;
+  //  c[2] = dx - dy + dz;
+  //  c[3] = dx - dy - dz;
+  //  c[4] = -dx + dy + dz;
+  //  c[5] = -dx + dy - dz;
+  //  c[6] = -dx - dy + dz;
+  //  c[7] = -dx - dy - dz;
 
-    /*
-    // write down triples of corner vertexes creating 12 triangles representing faces of OBB
-    feature->xyz[ 0] = c[3]; feature->xyz[ 1] = c[1]; feature->xyz[ 2] = c[0];    // 0, 1, 3
-    feature->xyz[ 3] = c[0]; feature->xyz[ 4] = c[2]; feature->xyz[ 5] = c[3];    // 3, 2, 0
-    feature->xyz[ 6] = c[6]; feature->xyz[ 7] = c[7]; feature->xyz[ 8] = c[3];    // 3, 7, 6
-    feature->xyz[ 9] = c[3]; feature->xyz[10] = c[2]; feature->xyz[11] = c[6];    // 6, 2, 3
-    feature->xyz[12] = c[0]; feature->xyz[13] = c[4]; feature->xyz[14] = c[6];    // 6, 4, 0
-    feature->xyz[15] = c[6]; feature->xyz[16] = c[2]; feature->xyz[17] = c[0];    // 0, 2, 6
+  //  /*
+  //  // write down triples of corner vertexes creating 12 triangles representing faces of OBB
+  //  feature->xyz[ 0] = c[3]; feature->xyz[ 1] = c[1]; feature->xyz[ 2] = c[0];    // 0, 1, 3
+  //  feature->xyz[ 3] = c[0]; feature->xyz[ 4] = c[2]; feature->xyz[ 5] = c[3];    // 3, 2, 0
+  //  feature->xyz[ 6] = c[6]; feature->xyz[ 7] = c[7]; feature->xyz[ 8] = c[3];    // 3, 7, 6
+  //  feature->xyz[ 9] = c[3]; feature->xyz[10] = c[2]; feature->xyz[11] = c[6];    // 6, 2, 3
+  //  feature->xyz[12] = c[0]; feature->xyz[13] = c[4]; feature->xyz[14] = c[6];    // 6, 4, 0
+  //  feature->xyz[15] = c[6]; feature->xyz[16] = c[2]; feature->xyz[17] = c[0];    // 0, 2, 6
 
-    feature->xyz[18] = c[7]; feature->xyz[19] = c[6]; feature->xyz[20] = c[4];    // 4, 6, 7
-    feature->xyz[21] = c[4]; feature->xyz[22] = c[5]; feature->xyz[23] = c[7];    // 7, 5, 4
-    feature->xyz[24] = c[1]; feature->xyz[25] = c[3]; feature->xyz[26] = c[7];    // 7, 3, 1
-    feature->xyz[27] = c[7]; feature->xyz[28] = c[5]; feature->xyz[29] = c[1];    // 1, 5, 7
-    feature->xyz[30] = c[4]; feature->xyz[31] = c[0]; feature->xyz[32] = c[1];    // 1, 0, 4
-    feature->xyz[33] = c[1]; feature->xyz[34] = c[5]; feature->xyz[35] = c[4];    // 4, 5, 1
-    */
+  //  feature->xyz[18] = c[7]; feature->xyz[19] = c[6]; feature->xyz[20] = c[4];    // 4, 6, 7
+  //  feature->xyz[21] = c[4]; feature->xyz[22] = c[5]; feature->xyz[23] = c[7];    // 7, 5, 4
+  //  feature->xyz[24] = c[1]; feature->xyz[25] = c[3]; feature->xyz[26] = c[7];    // 7, 3, 1
+  //  feature->xyz[27] = c[7]; feature->xyz[28] = c[5]; feature->xyz[29] = c[1];    // 1, 5, 7
+  //  feature->xyz[30] = c[4]; feature->xyz[31] = c[0]; feature->xyz[32] = c[1];    // 1, 0, 4
+  //  feature->xyz[33] = c[1]; feature->xyz[34] = c[5]; feature->xyz[35] = c[4];    // 4, 5, 1
+  //  */
 
-    // 24 edge segments of OBB
-    feature->xyz[0] = c[0]; feature->xyz[1] = c[1];
-    feature->xyz[2] = c[1]; feature->xyz[3] = c[3];
-    feature->xyz[4] = c[3]; feature->xyz[5] = c[2];
-    feature->xyz[6] = c[2]; feature->xyz[7] = c[0];
-    feature->xyz[8] = c[0]; feature->xyz[9] = c[4];
-    feature->xyz[10] = c[1]; feature->xyz[11] = c[5];
-    feature->xyz[12] = c[3]; feature->xyz[13] = c[7];
-    feature->xyz[14] = c[2]; feature->xyz[15] = c[6];
-    feature->xyz[16] = c[6]; feature->xyz[17] = c[4];
-    feature->xyz[18] = c[4]; feature->xyz[19] = c[5];
-    feature->xyz[20] = c[5]; feature->xyz[21] = c[7];
-    feature->xyz[22] = c[7]; feature->xyz[23] = c[6];
+  //  // 24 edge segments of OBB
+  //  feature->xyz[0] = c[0]; feature->xyz[1] = c[1];
+  //  feature->xyz[2] = c[1]; feature->xyz[3] = c[3];
+  //  feature->xyz[4] = c[3]; feature->xyz[5] = c[2];
+  //  feature->xyz[6] = c[2]; feature->xyz[7] = c[0];
+  //  feature->xyz[8] = c[0]; feature->xyz[9] = c[4];
+  //  feature->xyz[10] = c[1]; feature->xyz[11] = c[5];
+  //  feature->xyz[12] = c[3]; feature->xyz[13] = c[7];
+  //  feature->xyz[14] = c[2]; feature->xyz[15] = c[6];
+  //  feature->xyz[16] = c[6]; feature->xyz[17] = c[4];
+  //  feature->xyz[18] = c[4]; feature->xyz[19] = c[5];
+  //  feature->xyz[20] = c[5]; feature->xyz[21] = c[7];
+  //  feature->xyz[22] = c[7]; feature->xyz[23] = c[6];
 
-  }
+  //}
 
   // traverse hierarcy recursively and create output features as OBBs of clusters
   /*static void traverse_obb(Hierarchy* hr, int list_id, int level, Feature_writer& fwriter, Feature* feature) {
@@ -1653,8 +1676,6 @@ namespace utl
 
   void Bvh_builder::debug_write( const std::filesystem::path& path )
   {
-    std::cout << "writing ...." << std::endl;
-
     Feature_writer fwriter;
     
     Feature feature;
@@ -1672,9 +1693,6 @@ namespace utl
   }
 
   void Bvh_builder::debug_read(const std::filesystem::path& path) {
-
-    std::cout << "reading ...." << std::endl;
-
     Feature_reader freader;
 
     Feature feature;
@@ -1693,9 +1711,6 @@ namespace utl
       }
     }
     freader.close_bin();
-
-    std::cout << "features = " << feature_count << " vertexes = " << vertex_count << std::endl;
-
   }
 
 }

@@ -20,6 +20,7 @@ email: contracts@esri.com
 #include "pch.h"
 #include "utils/utl_buffer.h"
 #include "utils/utl_platform_def.h"
+#include <string>
 
 namespace i3slib
 {
@@ -30,30 +31,44 @@ namespace utl
 #pragma warning(push)
 #pragma warning(disable: 4724) //potential mod by 0
 
+namespace
+{
+
+int round_up_to_alignment(int size, int alignment)
+{
+  return ((size + alignment - 1) / alignment) * alignment;
+}
+
+}
+
 Buffer::Buffer(const char* ptr, int size, Memory mem, int align)
   : m_read_ptr(ptr) //union.
   , m_size(size)
   , m_mode(mem)
 {
+  I3S_ASSERT_EXT(align >= 0);
+
   if (mem == Memory::Deep)
   {
     m_rw_ptr = new char[size];
     if (ptr)
-      memcpy(m_rw_ptr, ptr, size);
+      std::memcpy(m_rw_ptr, ptr, size);
   }
   else if (mem == Memory::Deep_aligned)
   {
     if (align == 0)
       align = 16; //default
-    int rem = (size % align);
-    if (rem)
-      size += align - rem; // size must be multiple of align
-    I3S_ASSERT_EXT(align > 0 && size % align == 0);
+
+    size = round_up_to_alignment(size, align);
+    I3S_ASSERT(size % align == 0);
+
     //TODO: c++17 has std::aligned_malloc()
-    m_rw_ptr = (char*)_aligned_malloc( size, align );
+    m_rw_ptr = static_cast<char*>(_aligned_malloc(size, align));
+    if (!m_rw_ptr)
+      throw std::bad_alloc();
 
     if (ptr)
-      memcpy(m_rw_ptr, ptr, size);
+      std::memcpy(m_rw_ptr, ptr, m_size);
   }
 }
 #pragma warning(pop)

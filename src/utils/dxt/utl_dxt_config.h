@@ -18,9 +18,19 @@ email: contracts@esri.com
 */
 
 #pragma once
+#include <stdint.h>
 
+#ifdef _WIN32
 typedef unsigned char  BYTE;
 typedef unsigned short WORD;
 typedef unsigned long  DWORD;
+#else
+typedef uint8_t  BYTE;
+typedef uint16_t WORD;
+typedef uint32_t DWORD;
+#endif
 
+// We don't need any kind of export or import for the DXT stuff here.
+// DXT compressor code is included directly in the i3slib project and it's only used by i3slib
+// implementation privately, nothing of it is visible in i3slib APIs.
 #define EXTERN(type) type

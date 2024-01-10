@@ -25,6 +25,7 @@ email: contracts@esri.com
 #include <stdint.h>
 #include <cstring>
 #include <vector>
+#include <fstream>
 
 //-----------------------------------------------------------------------
 // definitions:   ::detail
@@ -55,8 +56,6 @@ bool _parse_extra_record(const char* extra_rec, int extra_rec_size, uint32_t fil
 {
   //constants:
   const uint32_t c_overflow = 0xFFFFFFFF;
-  const int c_block_hdr_size = 4;
-  const int c_zip_64_block_type = 1;
 
   *out_offset64 = offset32;
   *out_file_size64 = file_size32;
@@ -66,7 +65,7 @@ bool _parse_extra_record(const char* extra_rec, int extra_rec_size, uint32_t fil
   }
 
   int iter = 0;
-  while (iter < extra_rec_size - c_block_hdr_size)
+  while (iter < extra_rec_size - static_cast<int>(c_block_hdr_size))
   {
     //read the block header:
     uint16_t block_type = _read_uint16(&extra_rec[iter]);
@@ -121,12 +120,12 @@ bool parse_extra_record_cd_hdr(const char* extra_rec, int extra_rec_size, uint32
 }
 
 template< class Stream >
-bool read_tpl(Local_file_hdr& hdr, Stream* in, uint64_t offset, const std::string& actual_path, uint64_t* actual_packed_size)
+bool read_tpl(Local_file_hdr& hdr, Stream* in, uint64_t offset, uint64_t* actual_packed_size, std::string* actual_path = nullptr)
 {
   in->seekg(offset);
   //read the file hdr:
   in->read(reinterpret_cast<char*>(&hdr), sizeof(Local_file_hdr));
-  if( in->fail() || hdr.fn_length > 2048)
+  if (in->fail() || hdr.fn_length > 2048)
     return false;
   //read the file path for sanity:
   std::string path;
@@ -134,10 +133,15 @@ bool read_tpl(Local_file_hdr& hdr, Stream* in, uint64_t offset, const std::strin
 
   in->read(path.data(), path.size());
   detail::clean_path(&path);
-  if (actual_path != path)
+  if (actual_path)
   {
-    I3S_ASSERT_EXT(false); //corrupted/invalid hash file ? 
-    return false;
+    if (actual_path->empty())
+      *actual_path = path;
+    else if (*actual_path != path)
+    {
+      I3S_ASSERT_EXT(false); //corrupted/invalid hash file ? 
+      return false;
+    }
   }
   *actual_packed_size = hdr.packed_size;
   if (hdr.packed_size == detail::c_ones_32)
@@ -156,29 +160,36 @@ bool read_tpl(Local_file_hdr& hdr, Stream* in, uint64_t offset, const std::strin
   return !in->fail();
 }
 
-bool Local_file_hdr::read(std::istream* in, uint64_t offset, const std::string& actual_path, uint64_t* actual_packed_size) 
+bool Local_file_hdr::read(std::istream* in, uint64_t offset, uint64_t* actual_packed_size, std::string* actual_path)
 { 
-  return read_tpl( *this, in, offset, actual_path, actual_packed_size); 
+  return read_tpl( *this, in, offset, actual_packed_size, actual_path);
+}
+bool Local_file_hdr::read(Stream_like* in, uint64_t offset, uint64_t* actual_packed_size, std::string* actual_path)
+{
+  return read_tpl(*this, in, offset, actual_packed_size, actual_path);
 }
 
-bool Local_file_hdr::read(Stream_like* in, uint64_t offset, const std::string& actual_path, uint64_t* actual_packed_size)
+bool Local_file_hdr::write(std::ostream* out, uint64_t offset, const std::string& path, const char* content, uint64_t content_size)
 {
-  return read_tpl(*this, in, offset, actual_path, actual_packed_size); 
-}
-
-bool Local_file_hdr::write(std::ostream* out, uint64_t offset, const std::string& path, const char* content, int content_size)
-{
+  bool big_size = (content_size >= std::numeric_limits<uint32_t>::max());
   out->seekp(offset);
   this->fn_length = (uint16_t)path.size();
-  this->packed_size = content_size;
-  this->unpacked_size = content_size;
-  this->extra_length = 0;
+  this->packed_size = (uint32_t)content_size;
+  this->unpacked_size = (uint32_t)content_size;
+  this->extra_length = big_size? (uint16_t)sizeof(Extra_field_64bit_file_size) : 0;
   this->crc32 = ~crc32_buf(content, content_size);
 
   //read the file hdr:
   write_it(out, *this);
   //write the file path 
   out->write(path.data(), path.size());
+  if (big_size)
+  {
+    this->packed_size = detail::c_ones_32;
+    this->unpacked_size = detail::c_ones_32;
+    auto extra = Extra_field_64bit_file_size(content_size);
+    write_it(out, extra);
+  }
   //write the content:
   out->write(content, content_size);
   return !out->fail();
@@ -186,7 +197,7 @@ bool Local_file_hdr::write(std::ostream* out, uint64_t offset, const std::string
 
 
 template< class Stream_t > 
-bool  read_it_tpl(Stream_t& in, Cd_hdr& out )
+bool  read_it_tpl(Stream_t& in, Cd_hdr& out, std::vector<char>& extra_buffer)
 {
   if (!utl::read_it(&in, &out.raw) || !out.raw.is_valid())
     return false;
@@ -200,7 +211,7 @@ bool  read_it_tpl(Stream_t& in, Cd_hdr& out )
   {
     if (!out.raw.extra_length)
       return false; //expect extra record!
-    std::vector<char> extra_buffer(out.raw.extra_length);
+    extra_buffer.resize(out.raw.extra_length);
     in.read(extra_buffer.data(), extra_buffer.size());
     to_skip -= out.raw.extra_length; //just skip "comment" now.
     if (!detail::parse_extra_record_cd_hdr(extra_buffer.data(), (int)extra_buffer.size()
@@ -214,8 +225,22 @@ bool  read_it_tpl(Stream_t& in, Cd_hdr& out )
   return true;
 }
 
-bool   Cd_hdr::read_it(std::istream* in) { return read_it_tpl(*in, *this); }
-bool   Cd_hdr::read_it(Stream_like* in) { return read_it_tpl(*in, *this); }
+bool Cd_hdr::read_it(Stream_no_lock& in, std::vector<char> & temp_buffer)
+{
+  return read_it_tpl(in, *this, temp_buffer);
+}
+
+bool   Cd_hdr::read_it(std::istream* in) 
+{ 
+  std::vector<char> temp_buffer;
+  return read_it_tpl(*in, *this, temp_buffer);
+}
+
+bool   Cd_hdr::read_it(Stream_like* in) 
+{ 
+  std::vector<char> temp_buffer;
+  return read_it_tpl(*in, *this, temp_buffer);
+}
 
 
 void Cd_hdr::write(std::ostream* out)
@@ -223,10 +248,16 @@ void Cd_hdr::write(std::ostream* out)
   //detail::Cd_hdr_raw cdHdr(locHdr, offset);
   write_it(out, raw);
   out->write(path.data(), path.size());
+  if (raw.packed_size == detail::c_ones_32)
+  {
+    I3S_ASSERT_EXT(raw.unpacked_size == detail::c_ones_32 && raw.rel_offset == detail::c_ones_32);
+    auto extra = Extra_field_64_big_file_with_offset(this->size64, this->offset);
+    write_it(out, extra);
+  }
   if (raw.rel_offset == detail::c_ones_32)
   {
     // write length64 extra record:
-    auto extra = detail::Extra_field_64(offset);
+    auto extra = detail::Extra_field_64_offset_only(offset);
     write_it(out, extra);
   }
 }
@@ -239,7 +270,8 @@ static void  clean_path(std::string* path)
   //convert slashes:
   std::replace(path->begin(), path->end(), '\\', '/');
   //strip front '/':
-  (*path) = (*path).size() && (*path)[0] == '/' ? (*path).substr(1) : (*path);
+  if((*path).size() && (*path)[0] == '/')
+    (*path).erase(path->begin());
   // --- ISSUE: For legacy reason, we can't create hash with lower-case. 
   // TODO: when "upgrating" the hash file -> use lower-case. (writer/reader have to be consistent !)
   //to lower case ( path may only be ASCII!)

@@ -20,7 +20,7 @@ email: contracts@esri.com
 #pragma once
 #include "utils/utl_serialize_json_dom.h"
 #include "utils/utl_obb.h"
-#include "i3s_layer_dom.h"
+#include "i3s/i3s_layer_dom.h"
 
 namespace i3slib
 {
@@ -161,20 +161,7 @@ struct Legacy_node_desc
     ar & utl::opt("created", created, std::string());
     ar & utl::opt("expires", expires, std::string());
     ar & utl::opt("transform", utl::seq(transform));
-#if 0 //_DEBUG
-    try {
-      ar & utl::nvp("lodSelection", utl::seq(lod_selection)); //required 
-    }
-    catch (utl::Json_exception&)
-    {
-      //trying to work around invalid LodDescription
-      //only in "forgiving" read mode:
-      lod_selection.resize(1);
-      ar & utl::nvp("lodSelection", lod_selection[0]); //required 
-    }
-#else
     ar & utl::nvp("lodSelection", utl::seq(lod_selection)); //required 
-#endif
     ar & utl::opt("featureData", utl::seq(feature_data));
     ar & utl::opt("geometryData", utl::seq(geometry_data));
     ar & utl::opt("textureData", utl::seq(texture_data));
@@ -192,7 +179,7 @@ struct Mesh_material_ref_desc
 {
   // --- Fields:
   int definition_id=-1;
-  int resource_id=-1;
+  int32_t resource_id=-1;
   int texel_count_hint=0;
   // --- 
   SERIALIZABLE(Mesh_material_ref_desc);
@@ -202,7 +189,7 @@ struct Mesh_material_ref_desc
   template< class Ar > void serialize(Ar& ar)
   {
     ar & utl::nvp("definition", definition_id);
-    ar & utl::nvp("resource", resource_id);
+    ar & utl::opt("resource", resource_id, -1);
     ar & utl::opt("texelCountHint", texel_count_hint, 0);
   }
 };
@@ -212,7 +199,7 @@ struct Mesh_geometry_ref_desc
 {
   // --- Fields:
   int definition_id = -1;
-  int resource_id = -1;
+  uint32_t resource_id = std::numeric_limits<decltype(resource_id)>::max();
   int vertex_count = 0;
   int feature_count = 0;
   // --- 
@@ -232,14 +219,12 @@ struct Mesh_geometry_ref_desc
 struct Mesh_attribute_ref_desc
 {
   // --- Fields:
-  //int definition_id = -1;
-  int resource_id = -1;
+  uint32_t resource_id = std::numeric_limits<decltype(resource_id)>::max();
   // --- 
   SERIALIZABLE(Mesh_attribute_ref_desc);
   friend bool operator==(const Mesh_attribute_ref_desc& a, const Mesh_attribute_ref_desc& b) {return a.resource_id == b.resource_id; }
   template< class Ar > void serialize(Ar& ar)
   {
-    //ar & utl::nvp("definition", definition_id);
     ar & utl::nvp("resource", resource_id);
   }
 };
@@ -266,26 +251,26 @@ struct Mesh_desc_v17
 struct Node_desc_v17
 {
   // --- fields:
-  int                       index=-1;
+  uint32_t                  index= std::numeric_limits<decltype(index)>::max();
   double                    lod_threshold=0.0;
   utl::Obb_abs              obb;
   Mesh_desc_v17             mesh; //only one at version v17
   Shared_resource_ref_desc  shared_resource; // Only used for validation.
-  int                       parent_index=-1;
-  std::vector< int >        children;
+  uint32_t                  parent_index= std::numeric_limits<decltype(parent_index)>::max(); // Not used by Pro / Web Scene Viewer, but part of the spec
+  std::vector< uint32_t >   children;
 
   // --- 
   SERIALIZABLE(Node_desc_v17);
   template< class Ar > void serialize(Ar& ar)
   {
     ar & utl::nvp("index", index); //required (only id)
-    ar & utl::opt("parentIndex", parent_index, -1);
+    ar & utl::opt("parentIndex", parent_index, std::numeric_limits<decltype(parent_index)>::max());
     ar & utl::opt("lodThreshold", lod_threshold, 0.0);
     ar & utl::nvp("obb", obb );
     //ar & utl::opt("meshes", utl::seq(meshes), std::vector<Mesh_desc_v17>());
     ar & utl::opt("mesh", mesh, Mesh_desc_v17());
     ar & utl::opt("children", utl::seq(children));
-    ar& utl::opt("sharedResource", shared_resource, Shared_resource_ref_desc()); // legacy, only used for validation. 
+    ar & utl::opt("sharedResource", shared_resource, Shared_resource_ref_desc()); // legacy, only used for validation. 
   }
 };
 

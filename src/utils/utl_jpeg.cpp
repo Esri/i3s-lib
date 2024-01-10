@@ -80,7 +80,7 @@ static void jpeg_mem_src(j_decompress_ptr cinfo, const void* buffer, long nbytes
 }
 
 typedef std::function< unsigned char* (int w, int h) > Alloc_rgba_buffer_fct;
-enum class jpeg_status : int { ok, error_dst_buffer_too_small, error_jpeg_lib, error_unsupported_pixel_format };
+enum class jpeg_status : int { ok, error_dst_buffer_too_small, error_jpeg_lib, error_unsupported_pixel_format, error_unsupported_img_dim };
 
 
 struct Jpeg_error_manager {
@@ -127,8 +127,9 @@ namespace
 enum class Jpeg_format : int { rgba, rgb };
 
 jpeg_status decompress_jpeg_internal(const char* src, int jpg_size, int* w, int* h
-                                     ,  Alloc_rgba_buffer_fct allocator = [](int, int) { return nullptr; }
-                                     ,  Jpeg_format requested= Jpeg_format::rgba, bool* has_alpha=nullptr )
+  , Alloc_rgba_buffer_fct allocator = [](int, int) { return nullptr; }
+  , Jpeg_format requested = Jpeg_format::rgba, bool* has_alpha = nullptr
+  , int max_tex_dim = std::numeric_limits<int>::max())
 {
   if (has_alpha)
     *has_alpha = false;
@@ -199,10 +200,17 @@ jpeg_status decompress_jpeg_internal(const char* src, int jpg_size, int* w, int*
 
   width = cinfo.output_width;
   height = cinfo.output_height;
+
   *w = width;
   *h = height;
 
   pixel_size = cinfo.output_components;
+
+  if (width > max_tex_dim || height > max_tex_dim)
+  {
+    jpeg_destroy_decompress(&cinfo);
+    return jpeg_status::error_unsupported_img_dim;
+  }
 
   //syslog(LOG_INFO, "Proc: Image is %d by %d with %d components",
   //       width, height, pixel_size);
@@ -223,14 +231,14 @@ jpeg_status decompress_jpeg_internal(const char* src, int jpg_size, int* w, int*
   }
 
   //to avoid extra mem alloc, use output buffer in place: ( since source is 3 byte per pix and dest is 4 byte per pix )
-  utl::Rgba8*       dst_rgba = reinterpret_cast<utl::Rgba8*>(dst_ptr);
-  const utl::Rgb8*  src_rgb = reinterpret_cast<utl::Rgb8*>(dst_ptr);  //same if RGB mode
+  utl::Rgba8* dst_rgba = reinterpret_cast<utl::Rgba8*>(dst_ptr);
+  const utl::Rgb8* src_rgb = reinterpret_cast<utl::Rgb8*>(dst_ptr);  //same if RGB mode
   if (requested == Jpeg_format::rgba)
   {
     const auto quarter_shift = width * height;
     dst_ptr += quarter_shift;
     // we start at 1/4 of the buffer. (we'll need to add the opaque channel in place)
-    src_rgb = reinterpret_cast<utl::Rgb8*>(dst_ptr); 
+    src_rgb = reinterpret_cast<utl::Rgb8*>(dst_ptr);
   }
   // entire scanline (row). 
   row_stride = width * pixel_size;
@@ -251,7 +259,7 @@ jpeg_status decompress_jpeg_internal(const char* src, int jpg_size, int* w, int*
   // scanline buffers. rec_outbuf_height is typically 1, 2, or 4, and 
   // at the default high quality decompression setting is always 1.
   while (cinfo.output_scanline < cinfo.output_height) {
-    unsigned char *buffer_array[1];
+    unsigned char* buffer_array[1];
     buffer_array[0] = dst_ptr + (cinfo.output_scanline) * row_stride;
 
     // This code may run with two flavors of jpeglib:
@@ -312,7 +320,7 @@ jpeg_status decompress_jpeg_internal(const char* src, int jpg_size, int* w, int*
       std::vector< unsigned char > alpha_channel(count);
       //utl::Lock_guard lk(g_zlib_lock);
       int status = utl::zlib_uncompress(alpha_channel.data(), (int)alpha_channel.size()
-                                        , reinterpret_cast<const unsigned char*>(&src[offset]), (int)(jpg_size - sizeof(int) - offset));
+        , reinterpret_cast<const unsigned char*>(&src[offset]), (int)(jpg_size - sizeof(int) - offset));
 
       static const int c_z_ok = 0; // Z_OK
       if (status >= c_z_ok) // stat contains zlib error number
@@ -339,14 +347,21 @@ jpeg_status decompress_jpeg_internal(const char* src, int jpg_size, int* w, int*
   for (size_t i = 0; i < count - 1; ++i)
     dst_rgba[i] = src_rgb[i];
   // last one overlap in memory, so do a copy:
-  dst_rgba[count-1] = utl::Rgb8( src_rgb[count-1] );
+  dst_rgba[count - 1] = utl::Rgb8(src_rgb[count - 1]);
 
   return jpeg_status::ok;
 }
 
-bool utl::get_jpeg_size(const char* src, int bytes, int* w, int* h)
+bool utl::get_jpeg_size(const char* src, int bytes, int* w, int* h, int max_tex_dim)
 {
-  auto status = decompress_jpeg_internal(src, bytes, w, h);
+  jpeg_status status;
+  if (max_tex_dim == -1)
+    status = decompress_jpeg_internal(src, bytes, w, h);
+  else
+  {
+    Alloc_rgba_buffer_fct allocator = [](int, int) { return nullptr; };
+    status = decompress_jpeg_internal(src, bytes, w, h, allocator, Jpeg_format::rgba, nullptr, max_tex_dim);
+  }
   return status == jpeg_status::error_dst_buffer_too_small;
 }
 

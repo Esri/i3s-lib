@@ -20,6 +20,14 @@ email: contracts@esri.com
 // Use pragma comment(lib) to link conditionally in MSVC build.
 // With other compilers this is configured through CMakeLists.
 
-#if defined(_MSC_VER) && !defined(NO_ETC2_SUPPORT)
+#if defined(_MSC_VER)
+
+#if !defined(NO_ETC2_SUPPORT)
 #pragma comment(lib, "EtcLib.lib")
+#endif
+
+#if !defined(NO_BASIS_ENCODER_SUPPORT) || !defined(NO_BASIS_TRANSCODER_SUPPORT) 
+#pragma comment(lib, "basisu.lib")
+#endif
+
 #endif

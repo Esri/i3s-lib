@@ -33,60 +33,119 @@ namespace i3slib
 namespace utl 
 {
 
+[[ nodiscard ]] inline String_os to_string_os(const stdfs::path& path) {
+#ifdef PCSL_WIDE_STRING_OS
+  return path.generic_wstring();
+#else
+  return utl::to_string(path.generic_u8string());
+#endif
+}
+
 // This allows passing std::filesystem::path arguments to Basic_tracker logging funcs.
-template<> inline std::string to_string(const stdfs::path& path) { return path.u8string(); }
+template<>
+[[ nodiscard ]] inline std::string to_string(const stdfs::path& path) {
+  return to_string(path.generic_u8string());
+}
 
-I3S_EXPORT bool create_directory_recursively(stdfs::path path);
-I3S_EXPORT bool file_exists(const stdfs::path& path);
-I3S_EXPORT bool folder_exists(const stdfs::path& path);
+#ifdef __cpp_char8_t
+template <class Source>
+std::filesystem::path u8path(const Source& source)
+{
+  return std::filesystem::path(source);
+}
 
-I3S_EXPORT bool remove_file(const stdfs::path& path);
+template <>
+inline std::filesystem::path u8path(const std::string& source)
+{
+  return std::filesystem::path(as_u8string_view(source));
+}
+
+inline std::filesystem::path u8path(std::string_view source)
+{
+  return std::filesystem::path(as_u8string_view(source));
+}
+
+template< class InputIt >
+std::filesystem::path u8path(InputIt first, InputIt last)
+{
+  return std::filesystem::path(first, last);
+}
+#else
+using std::filesystem::u8path;
+#endif
+
+inline std::string to_url(const stdfs::path& p)
+{
+  auto r = std::string("file://");
+  r.append(as_string_view(p.generic_u8string()));
+  return r;
+}
+
+[[ nodiscard ]]
+I3S_EXPORT bool create_directory_recursively(stdfs::path path)noexcept;
+[[ nodiscard ]]
+I3S_EXPORT bool file_exists(const stdfs::path& path)noexcept;
+[[ nodiscard ]]
+I3S_EXPORT bool folder_exists(const stdfs::path& path)noexcept;
+
+[[ nodiscard ]]
+I3S_EXPORT bool remove_file(const stdfs::path& path)noexcept; // returns true if file was deleted or if it did not exist
 
 // Read all bytes from file into string.
-I3S_EXPORT std::string read_file(const stdfs::path& path);
+[[ nodiscard ]]
+I3S_EXPORT std::string read_file(const stdfs::path& path)noexcept;
 
 // Write byte array to file.
-I3S_EXPORT bool write_file(const stdfs::path& path, const char* data, size_t bytes);
+[[ nodiscard ]]
+I3S_EXPORT bool write_file(const stdfs::path& path, const char* data, size_t bytes)noexcept;
 
 // Write string to file.
-inline bool write_file(const stdfs::path& path, const std::string& content)
+[[ nodiscard ]]
+inline bool write_file(const stdfs::path& path, const std::string& content)noexcept
 { return write_file(path, content.data(), content.size()); }
 
-inline stdfs::path make_path(const stdfs::path& ref_path, const stdfs::path& res_path)
+[[ nodiscard ]] inline
+stdfs::path make_path(const stdfs::path& ref_path, const stdfs::path& res_path) // can throw bad_alloc or bad_array_new_length
 {
   return (ref_path / res_path).lexically_normal();
 }
 
-
-stdfs::path::string_type get_generic_path_name(const stdfs::path& path);
+[[ nodiscard ]]
+I3S_EXPORT stdfs::path::string_type get_generic_path_name(const stdfs::path& path) noexcept;
 
 class Scoped_folder
 {
 public:
-  I3S_EXPORT explicit Scoped_folder(stdfs::path folder_path):
+  I3S_EXPORT explicit Scoped_folder(stdfs::path folder_path) noexcept:
     path_(std::move(folder_path))
   {}
-
-  Scoped_folder(Scoped_folder&&) = default;
+  Scoped_folder() noexcept = default;
+  Scoped_folder(Scoped_folder&&) noexcept = default;
 
   Scoped_folder(const Scoped_folder&) = delete;
   Scoped_folder& operator=(const Scoped_folder&) = delete;
 
+  [[ nodiscard ]]
   I3S_EXPORT bool delete_folder(
     std::ostream& utf8_error_message_destination, 
     bool also_report_deleted_file_count = false) noexcept;
   
-  I3S_EXPORT void delete_folder();
+  I3S_EXPORT void delete_folder() noexcept;
 
   I3S_EXPORT ~Scoped_folder() noexcept;
 
+  [[ nodiscard ]]
   const stdfs::path& path() const { return path_; }
 
 private:
   stdfs::path path_;
 };
 
-Scoped_folder I3S_EXPORT create_temporary_folder(const stdfs::path& prefix);
+// in case of an error returns Scoped_folder(). Call folder.path().empty() to test that the folder was not created.
+[[ nodiscard ]]
+Scoped_folder I3S_EXPORT create_temporary_folder(stdfs::path prefix) noexcept;
+[[ nodiscard ]]
+stdfs::path create_temporary_folder_path(stdfs::path prefix) noexcept;
 
 } // namespace utl
 

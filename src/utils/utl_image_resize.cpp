@@ -18,10 +18,10 @@ email: contracts@esri.com
 */
 
 #include "pch.h"
-#include "utl_image_resize.h"
+#include "utils/utl_image_resize.h"
 #include <cmath>
 #include <cstring>
-#include <stdint.h>
+#include <cstdint>
 #include <memory>
 #include <cstring>
 

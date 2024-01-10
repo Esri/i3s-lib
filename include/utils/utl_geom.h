@@ -19,12 +19,15 @@ email: contracts@esri.com
 
 #pragma once
 #include "utils/utl_i3s_assert.h"
+#include <type_traits>
 #include <cmath> //sqrt
 #include <algorithm> //just for min/max...
 #include <tuple>
+#include <cstdint>
 
 #pragma warning(push)
 #pragma warning(disable:4251)
+
 #ifdef foreach
 #undef foreach
 #endif
@@ -41,6 +44,23 @@ namespace i3slib
 namespace utl
 {
 
+
+template <typename T> inline constexpr
+int sgn(T x) 
+{
+  static_assert(std::is_arithmetic<T>());
+  if constexpr(std::is_signed<T>())
+    return (T(0) < x) - (x < T(0));
+  else
+    return T(0) < x;
+}
+
+// 3.141592653589793 is sufficient to represent Pi with double precision.
+// Microsoft's STL std::numbers::pi_v<double> definition agrees with that.
+// However M_PI from <math.h> uses more digits for some reason I don't know,
+// and everyone seems to favor that value, so here it is.
+constexpr double c_pi = 3.14159265358979323846;
+
 //! gcc has issue with abs()... 
 template< class T > inline T my_abs(T v) noexcept { return v < T(0) ? -v : v; }
 
@@ -56,33 +76,33 @@ template< class T >
 struct Vec2
 {
   //SERIALIZABLE( Vec2<T> );
-  Vec2():x((T)0), y((T)0){}
-  Vec2(T _x, T _y) : x(_x), y(_y){}
-  explicit Vec2(T _v) : x(_v), y(_v){}
-  template< class Y > Vec2(const Vec2<Y>& src) : x((T)src.x), y((T)src.y) {}
-  template< class Y > Vec2( const Vec3<Y>& src ) : x( (T)src.x ), y( (T)src.y ) {}
+  constexpr Vec2():x((T)0), y((T)0){}
+  constexpr Vec2(T _x, T _y) : x(_x), y(_y){}
+  constexpr explicit Vec2(T _v) : x(_v), y(_v){}
+  template< class Y > constexpr Vec2(const Vec2<Y>& src) : x((T)src.x), y((T)src.y) {}
+  template< class Y > constexpr Vec2( const Vec3<Y>& src ) : x( (T)src.x ), y( (T)src.y ) {}
 
   T x, y;
-  friend Vec2<T>   operator*( T a, const Vec2<T>& b )                  { return Vec2<T>( a * b.x, a* b.y ); }
-  friend Vec2<T>   operator*( const Vec2<T>& b, T a)                   { return Vec2<T>( a * b.x, a* b.y ); }
-  friend Vec2<T>   operator*( const Vec2<T>& a, const Vec2<T>& b )     { return Vec2<T>( a.x * b.x, a.y* b.y ); }
-  friend Vec2<T>   operator/(const Vec2<T>& a, T b)                    { return Vec2<T>(a.x / b, a.y / b); }
-  friend Vec2<T>   operator/(T a, const Vec2<T>& b )                   { return Vec2<T>(a / b.x, a / b.y); }
-  friend Vec2<T>   operator/(const Vec2<T>& a, const Vec2<T>& b)       { return Vec2<T>(a.x / b.x, a.y / b.y); }
-  friend Vec2<T>   operator-(const Vec2<T>& a, const Vec2<T>& b)       { return Vec2<T>(a.x - b.x, a.y - b.y); }
-  friend Vec2<T>   operator-(const Vec2<T>& a, T b)                    { return Vec2<T>(a.x - b, a.y - b); }
-  friend Vec2<T>   operator-(T a, const Vec2<T>& b)                    { return Vec2<T>(a -b.x, a - b.y); }
-  friend Vec2<T>   operator+(T a, const Vec2<T>& b)                    { return Vec2<T>(a + b.x, a + b.y); }
-  friend Vec2<T>   operator+(const Vec2<T>& b, T a )                   { return Vec2<T>(a + b.x, a + b.y); }
-  friend Vec2<T>   operator+(const Vec2<T>& a, const Vec2<T>& b)       { return Vec2<T>(a.x + b.x, a.y + b.y); }
-  Vec2<T>&         operator+=(const Vec2<T>& b) noexcept               { x += b.x; y += b.y; return *this; }
-  Vec2<T>&         operator-=(const Vec2<T>& b) noexcept               { x -= b.x; y -= b.y; return *this; }
-  Vec2<T>&         operator/=(const Vec2<T>& b) noexcept               { x /= b.x; y /= b.y; return *this; }
-  Vec2<T>&         operator/=( T b) noexcept                           { x /= b;   y /= b; return *this; }
-  Vec2<T>&         operator*=(const Vec2<T>& b) noexcept               { x *= b.x; y *= b.y; return *this; }
-  Vec2<T>&         operator*=( T b) noexcept                           { x *= b;   y *= b; return *this; }
+  friend constexpr Vec2<T> operator*( T a, const Vec2<T>& b )                  { return Vec2<T>( a * b.x, a* b.y ); }
+  friend constexpr Vec2<T> operator*( const Vec2<T>& b, T a)                   { return Vec2<T>( a * b.x, a* b.y ); }
+  friend constexpr Vec2<T> operator*( const Vec2<T>& a, const Vec2<T>& b )     { return Vec2<T>( a.x * b.x, a.y* b.y ); }
+  friend constexpr Vec2<T> operator/(const Vec2<T>& a, T b)                    { return Vec2<T>(a.x / b, a.y / b); }
+  friend constexpr Vec2<T> operator/(T a, const Vec2<T>& b )                   { return Vec2<T>(a / b.x, a / b.y); }
+  friend constexpr Vec2<T> operator/(const Vec2<T>& a, const Vec2<T>& b)       { return Vec2<T>(a.x / b.x, a.y / b.y); }
+  friend constexpr Vec2<T> operator-(const Vec2<T>& a, const Vec2<T>& b)       { return Vec2<T>(a.x - b.x, a.y - b.y); }
+  friend constexpr Vec2<T> operator-(const Vec2<T>& a, T b)                    { return Vec2<T>(a.x - b, a.y - b); }
+  friend constexpr Vec2<T> operator-(T a, const Vec2<T>& b)                    { return Vec2<T>(a -b.x, a - b.y); }
+  friend constexpr Vec2<T> operator+(T a, const Vec2<T>& b)                    { return Vec2<T>(a + b.x, a + b.y); }
+  friend constexpr Vec2<T> operator+(const Vec2<T>& b, T a )                   { return Vec2<T>(a + b.x, a + b.y); }
+  friend constexpr Vec2<T> operator+(const Vec2<T>& a, const Vec2<T>& b)       { return Vec2<T>(a.x + b.x, a.y + b.y); }
+  constexpr Vec2<T>& operator+=(const Vec2<T>& b) noexcept { x += b.x; y += b.y; return *this; }
+  constexpr Vec2<T>& operator-=(const Vec2<T>& b) noexcept { x -= b.x; y -= b.y; return *this; }
+  constexpr Vec2<T>& operator/=(const Vec2<T>& b) noexcept { x /= b.x; y /= b.y; return *this; }
+  constexpr Vec2<T>& operator/=( T b) noexcept             { x /= b;   y /= b; return *this; }
+  constexpr Vec2<T>& operator*=(const Vec2<T>& b) noexcept { x *= b.x; y *= b.y; return *this; }
+  constexpr Vec2<T>& operator*=( T b) noexcept             { x *= b;   y *= b; return *this; }
+  constexpr Vec2 <T> operator-() const { return Vec2<T>( -x, -y ); }
 
-  Vec2 <T>         operator-() const                    { return Vec2<T>( -x, -y ); }
   T                length() const                       { return (T)sqrt( x*x + y*y ); }
   T                length_sqr() const noexcept { return  x * x + y * y; }
 
@@ -93,9 +113,13 @@ struct Vec2
   constexpr static int              size()  noexcept                 { return 2; }
   T&               operator[](size_t i) noexcept                     { I3S_ASSERT(i < 2); return reinterpret_cast<T*>(this)[i]; }
   const T&         operator[](size_t i) const noexcept               { I3S_ASSERT(i < 2); return reinterpret_cast<const T*>(this)[i]; }
+  bool constexpr             is_zero() const { return x == (T)0 && y == (T)0; }
 
   static T         cross(const Vec2<T>& a, const Vec2<T>& b)  noexcept { return a.x*b.y - a.y*b.x; }
-  static T         l1_distance(const Vec2<T>& v, const Vec2<T>& w)noexcept { return my_abs(v.x - w.x) + my_abs(v.y - w.y) ; }
+  static T         l1_distance(const Vec2<T>& v, const Vec2<T>& w)noexcept 
+  { 
+    return my_abs(v.x - w.x) + my_abs(v.y - w.y) ; 
+  }
   static T         l1_distance(const Vec2<T>& v)noexcept { return my_abs(v.x) + my_abs(v.y); }
 
   friend bool operator==(const Vec2<T>& a, const Vec2<T>& b)         { return a.x == b.x && a.y == b.y; }
@@ -107,12 +131,15 @@ struct Vec2
 
   Vec3<T>          insert(size_t i, T v) const noexcept { I3S_ASSERT(i < 3); return Vec3<T>(i==0?v:x, i==1?v:(i==0?x:y), i==2?v:y); }  // insert a coordinate
   Vec2<T>          ortho() const  { return Vec2<T>(-y, x); }   // orthogonal vector
-  T* begin() noexcept { return &x; }
-  const T* begin() const noexcept { return &x; }
-  const T* cbegin() const noexcept { return &x; }
-  T* end() noexcept { return &y + 1; }
-  const T* end() const noexcept { return &y + 1; }
-  const T* cend() const noexcept { return &y + 1; }
+
+  constexpr T* data() noexcept { return &x; }
+  constexpr const T* data()const noexcept { return &x; }
+  constexpr T* begin() noexcept { return &x; }
+  constexpr const T* begin() const noexcept { return &x; }
+  constexpr const T* cbegin() const noexcept { return &x; }
+  constexpr T* end() noexcept { return &y + 1; }
+  constexpr const T* end() const noexcept { return &y + 1; }
+  constexpr const T* cend() const noexcept { return &y + 1; }
 
 };
 typedef Vec2<int> Vec2i;
@@ -134,20 +161,33 @@ struct Vec3
   //SERIALIZABLE( Vec3<T> );
   constexpr Vec3() : x((T)0), y((T)0), z((T)0) {}
   constexpr Vec3( T _x, T _y, T _z ) : x( _x ), y( _y ), z( _z ){}
-  explicit Vec3(T v) noexcept : x(v), y(v), z(v) {}
-  explicit Vec3(const Vec4<T>& v) noexcept;
-  template<class Y> explicit Vec3(const Vec4<Y>& v) noexcept;
-  template< class Y > explicit Vec3( const Vec3<Y>& src ) noexcept: x( (T)src.x ), y( (T)src.y ), z( (T)src.z ) {}
-  template< class Y > explicit Vec3(const Vec2<Y>& src, T _z = T(0))noexcept : x((T)src.x), y((T)src.y), z(_z) {}
-  T   distance( const Vec3<T>& p ) const noexcept                           { return (p-*this).length(); }
-  T   distance_sqr( const Vec3<T>& p ) const noexcept                        { return (p-*this).length_sqr(); }
-  T   length() const    noexcept                                            { return std::sqrt( x*x + y*y+z*z ); }
-  Vec3<T> normalized() const  noexcept                                      { T len= length(); if( len==0 ) return Vec3<T>(0.0); len = T(1.0) / len; return Vec3<T>(x*len, y*len, z*len); }
-  T   length_sqr() const noexcept                                            { return  x*x + y*y+z*z; }
-  T   dot( const Vec3<T>& v ) const noexcept                                { return v.x * x + v.y * y + v.z * z;}
-  static T   dot( const Vec3<T>& v, const Vec3<T>& w )noexcept              { return v.x * w.x + v.y * w.y + v.z * w.z;}
-  static T   l1_distance(const Vec3<T>& v, const Vec3<T>& w)noexcept         { return my_abs(v.x - w.x) + my_abs(v.y - w.y) + my_abs(v.z - w.z); }
-  T   min_distance_from_segment( const Vec3<T>& a, const Vec3<T>& b ) const;
+  explicit constexpr Vec3(T v) noexcept : x(v), y(v), z(v) {}
+  explicit constexpr Vec3(const Vec4<T>& v) noexcept;
+  template<class Y> explicit constexpr Vec3(const Vec4<Y>& v) noexcept;
+  template< class Y > explicit constexpr Vec3( const Vec3<Y>& src ) noexcept
+    : x( (T)src.x ), y( (T)src.y ), z( (T)src.z ) {}
+  template< class Y > explicit constexpr Vec3(const Vec2<Y>& src, T _z = T(0))noexcept
+    : x((T)src.x), y((T)src.y), z(_z) {}
+  T distance( const Vec3<T>& p ) const noexcept { return (p-*this).length(); }
+  T distance_sqr( const Vec3<T>& p ) const noexcept { return (p-*this).length_sqr(); }
+  T length() const noexcept { return std::sqrt( x*x + y*y+z*z ); }
+  Vec3<T> normalized() const  noexcept 
+  { 
+    T len= length(); 
+    if( len==0 ) return Vec3<T>(0.0); 
+    len = T(1.0) / len; 
+    return Vec3<T>(x*len, y*len, z*len); 
+  }
+  T length_sqr() const noexcept { return  x*x + y*y+z*z; }
+  T dot( const Vec3<T>& v ) const noexcept { return v.x * x + v.y * y + v.z * z;}
+  static T dot( const Vec3<T>& v, const Vec3<T>& w )noexcept { return v.x * w.x + v.y * w.y + v.z * w.z;}
+  static T l0_distance(const Vec3<T>& v, const Vec3<T>& w)noexcept
+  {
+    return std::max(my_abs(v.x - w.x), std::max(my_abs(v.y - w.y), my_abs(v.z - w.z)));
+  }
+  static T l1_distance(const Vec3<T>& v, const Vec3<T>& w)noexcept 
+  { return my_abs(v.x - w.x) + my_abs(v.y - w.y) + my_abs(v.z - w.z); }
+  T min_distance_from_segment( const Vec3<T>& a, const Vec3<T>& b ) const;
 
   //template< class Ar > void serialize( Ar& ar )                             { ar & utl::nvp("x",x) & utl::nvp("y", y ) & utl::nvp("z", z); }
   friend constexpr Vec3<T>   operator-(const Vec3<T>& a, T b) noexcept                { return Vec3<T>(a.x - b, a.y - b, a.z - b); }
@@ -168,21 +208,36 @@ struct Vec3
   Vec3<T>&         operator>>=(T b) noexcept; // must be specialized for integer types
   Vec3<T>          operator<<(T b) const noexcept; // must be specialized for integer types
   Vec3<T>&         operator<<=(T b) noexcept; // must be specialized for integer types
-  Vec3<T>&         operator+=(const Vec3<T>& b) noexcept                    { x += b.x; y += b.y; z += b.z; return *this; }
-  Vec3<T>&         operator+=( T b) noexcept                                { x += b; y += b; z += b; return *this; }
-  Vec3<T>&         operator-=( const Vec3<T>& b ) noexcept                  { x -= b.x; y -= b.y; z -= b.z; return *this; }
-  Vec3<T>&         operator/=(T b) noexcept                                 { x /= b; y /= b; z /= b; return *this; }
-  Vec3<T>&         operator/=(const Vec3<T>& b) noexcept                    { x /= b.x; y /= b.y; z /= b.z; return *this; }
-  Vec3<T>&         operator*=(const Vec3<T>& b) noexcept                    { x *= b.x; y *= b.y; z *= b.z; return *this; }
-  Vec3<T>&         operator*=( T b ) noexcept                               { x *= b; y *= b; z *= b; return *this; }
-  Vec3<T>          operator-() const noexcept                               { return Vec3<T>( -x, -y, -z); }
-  T                max_any() const noexcept                                     { return std::max( x, std::max( y, z ) );} // warning: renamed to avoid name conflict with friend max()
-  T                min_any() const noexcept                                     { return std::min( x, std::min( y, z ) );}// warning: renamed to avoid name conflict with friend min()
-  T                sum() const noexcept                                     { return x+y+z;}
-  template<class Y > Y product() const noexcept                             { return (Y)x*(Y)y*(Y)z; }
-  static Vec3<T>   cross( const Vec3<T>& a, const Vec3<T>& b) noexcept      { return Vec3<T>( a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x ); }
-  friend bool operator==( const Vec3<T>& a, const Vec3<T>& b ) noexcept     { return a.x ==b.x && a.y == b.y && a.z == b.z; }
-  friend bool operator!=( const Vec3<T>& a, const Vec3<T>& b ) noexcept     { return !(a==b); }
+  constexpr Vec3<T>&         operator+=(const Vec3<T>& b) noexcept                    { x += b.x; y += b.y; z += b.z; return *this; }
+  constexpr Vec3<T>&         operator+=( T b) noexcept                                { x += b; y += b; z += b; return *this; }
+  constexpr Vec3<T>&         operator-=( const Vec3<T>& b ) noexcept                  { x -= b.x; y -= b.y; z -= b.z; return *this; }
+  constexpr Vec3<T>&         operator/=(T b) noexcept                                 { x /= b; y /= b; z /= b; return *this; }
+  constexpr Vec3<T>&         operator/=(const Vec3<T>& b) noexcept                    { x /= b.x; y /= b.y; z /= b.z; return *this; }
+  constexpr Vec3<T>&         operator*=(const Vec3<T>& b) noexcept                    { x *= b.x; y *= b.y; z *= b.z; return *this; }
+  constexpr Vec3<T>&         operator*=( T b ) noexcept                               { x *= b; y *= b; z *= b; return *this; }
+  constexpr Vec3<T>          operator-() const noexcept                               { return Vec3<T>( -x, -y, -z); }
+  constexpr Vec3<T>          abs() const noexcept                                     { return Vec3<T>(std::abs(x), std::abs(y), std::abs(z)); }
+  constexpr T max_any() const noexcept { return std::max( x, std::max( y, z ) );} // warning: renamed to avoid name conflict with friend max()
+  constexpr T min_any() const noexcept { return std::min( x, std::min( y, z ) );} // warning: renamed to avoid name conflict with friend min()
+  constexpr std::pair<T, T> minmax_any() const noexcept
+  {
+    auto [min_value, max_value] = std::minmax(x, y);
+
+    if (z < min_value)
+      return { z, max_value };
+    else if (max_value < z)
+      return { min_value, z };
+    else
+      return { min_value, max_value };
+  }
+
+  constexpr T max_any_abs() const noexcept { return (std::max)(std::abs(x), (std::max)(std::abs(y), std::abs(z))); }
+  constexpr T sum() const noexcept     { return x+y+z; }
+  template <class Y > 
+  constexpr Y product() const noexcept { return (Y)x*(Y)y*(Y)z; }
+  static constexpr Vec3<T>   cross( const Vec3<T>& a, const Vec3<T>& b) noexcept      { return Vec3<T>( a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x ); }
+  friend constexpr bool operator==( const Vec3<T>& a, const Vec3<T>& b ) noexcept     { return a.x ==b.x && a.y == b.y && a.z == b.z; }
+  friend constexpr bool operator!=( const Vec3<T>& a, const Vec3<T>& b ) noexcept     { return !(a==b); }
   friend Vec3<T>   min(const Vec3<T>& a, const Vec3<T>& b) noexcept         { return Vec3<T>(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)); }
   friend Vec3<T>   max(const Vec3<T>& a, const Vec3<T>& b) noexcept         { return Vec3<T>(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)); }
   friend bool      is_equal(const Vec3<T>& a, const Vec3<T>& b, T epsi) noexcept       { return my_abs( a.x-b.x) < epsi && my_abs(a.y - b.y) < epsi && my_abs(a.z - b.z) < epsi; }
@@ -203,14 +258,19 @@ struct Vec3
   bool             all_less(const Vec3<T>& a) const    { return x < a.x && y < a.y && z < a.z; }
   bool             all_greater(const Vec3<T>& a) const { return x > a.x&& y > a.y&& z > a.z; }
   bool             all_gr_eq(const Vec3<T>& a) const   { return x >= a.x&& y >= a.y&& z >= a.z; }
-  static constexpr int              size()  noexcept                        { return 3; }
-
-  T* begin() noexcept { return &x; }
-  const T* begin() const noexcept { return &x; }
-  const T* cbegin() const noexcept { return &x; }
-  T* end() noexcept { return &z + 1; }
-  const T* end() const noexcept { return &z + 1; }
-  const T* cend() const noexcept { return &z + 1; }
+  
+  static constexpr Vec3<int> sgn(const Vec3<T>& v) noexcept { return Vec3<int>(utl::sgn(v.x), utl::sgn(v.y), utl::sgn(v.z)); }
+  static constexpr int size() noexcept { return 3; }
+  bool constexpr             is_zero() const { return x == (T)0 && y == (T)0 && z == (T)0; }
+  bool constexpr             is_cosign(const Vec3<T>& v) const { return sgn(v) == sgn(*this); }
+  constexpr T* data() noexcept { return &x; }
+  constexpr const T* data()const noexcept { return &x; }
+  constexpr T* begin() noexcept { return &x; }
+  constexpr const T* begin() const noexcept { return &x; }
+  constexpr const T* cbegin() const noexcept { return &x; }
+  constexpr T* end() noexcept { return &z + 1; }
+  constexpr const T* end() const noexcept { return &z + 1; }
+  constexpr const T* cend() const noexcept { return &z + 1; }
 };
 typedef Vec3< double > Vec3d;
 typedef Vec3< float > Vec3f;
@@ -220,6 +280,7 @@ typedef Vec3< unsigned char > Rgb8;
 typedef Vec3< unsigned short > Rgb16;
 static_assert( sizeof( Rgb8 )  == 3, "Unexpected size" );
 static_assert( sizeof( Rgb16 ) == 6, "Unexpected size" );
+static_assert(Vec3i::cross(Vec3i(1, 0, 0), Vec3i(0, 1, 0)) == Vec3i(0, 0, 1));
 
 template< class T >
 inline T  Vec3<T>::min_distance_from_segment(const Vec3<T>& a, const Vec3<T>& b) const
@@ -240,8 +301,8 @@ inline T  Vec3<T>::min_distance_from_segment(const Vec3<T>& a, const Vec3<T>& b)
 }
 
 template< class T >
-inline Vec3<T>::Vec3(const Vec4<T>& v) noexcept : x(v.x), y(v.y), z(v.z) {}
-template<class T> template< class Y > Vec3<T>::Vec3(const Vec4<Y>& v) noexcept: x((T)v.x), y((T)v.y), z((T)v.z) {}
+inline constexpr Vec3<T>::Vec3(const Vec4<T>& v) noexcept : x(v.x), y(v.y), z(v.z) {}
+template<class T> template< class Y > constexpr Vec3<T>::Vec3(const Vec4<Y>& v) noexcept: x((T)v.x), y((T)v.y), z((T)v.z) {}
 
 // --- bit shift specialization for (some) interger types;
 //template<> inline  Vec3<int>      Vec3<int>::operator>>(int b) noexcept { return Vec3<int>( x >> b, y >> b, z >> b ); }
@@ -260,6 +321,17 @@ template<> inline  Vec3<uint32_t>& Vec3<uint32_t>::operator<<=(uint32_t b) noexc
 template<> inline  Vec3<uint32_t>  Vec3<uint32_t>::operator&(uint32_t b) const noexcept  { return Vec3<uint32_t>(x & b, y & b, z & b); }
 template<> inline  Vec3<uint32_t>& Vec3<uint32_t>::operator&=(uint32_t b) noexcept { x &= b; y &= b; z &= b; return *this; }
 
+template <typename T, typename Binary_operation>
+Vec3<T> vec_binary_op(const Vec3<T>& a, const Vec3<T>& b, Binary_operation binary_op)
+{
+    return { binary_op(a.x, b.x), binary_op(a.y, b.y), binary_op(a.z, b.z) };
+}
+
+template <typename T, typename Unary_operation>
+utl::Vec3<T> vec_function(const utl::Vec3<T>& v, Unary_operation unary_op)
+{
+  return (utl::Vec3<T>(unary_op(v.x), unary_op(v.y), unary_op(v.z)));
+}
 
 // ---------------------------------------------------------
 //                 Vec4
@@ -269,11 +341,11 @@ struct Vec4
 {
   //SERIALIZABLE( Vec4<T> );
   typedef T value_type;
-  Vec4(): x((T)0), y((T)0), z((T)0), w((T)0) {}
-  explicit Vec4(T v) : x(v), y(v), z(v), w(v){}
-  Vec4( T _x, T _y, T _z, T _w ) : x( _x ), y( _y ), z( _z ), w( _w ){}
-  Vec4( const Vec3<T>& xyz, T _w ) : x( xyz.x ), y( xyz.y ), z( xyz.z ), w( _w ){}
-  template< class Y > explicit Vec4(const Vec4<Y>& src) noexcept : x((T)src.x), y((T)src.y), z((T)src.z), w((T)src.w) {}
+  constexpr Vec4(): x((T)0), y((T)0), z((T)0), w((T)0) {}
+  explicit constexpr Vec4(T v) : x(v), y(v), z(v), w(v){}
+  constexpr Vec4( T _x, T _y, T _z, T _w ) : x( _x ), y( _y ), z( _z ), w( _w ){}
+  constexpr Vec4( const Vec3<T>& xyz, T _w ) : x( xyz.x ), y( xyz.y ), z( xyz.z ), w( _w ){}
+  template< class Y > explicit constexpr Vec4(const Vec4<Y>& src) noexcept : x((T)src.x), y((T)src.y), z((T)src.z), w((T)src.w) {}
 
   T   length() const      { return sqrt( x*x + y*y+ z*z + w*w ); }
 
@@ -358,7 +430,15 @@ struct Mat3x3
   Mat3x3(T m00, T m01, T m02,
          T m10, T m11, T m12,
          T m20, T m21, T m22);
-  explicit Mat3x3(T diag) { memset(this, 0, sizeof(Mat3x3<T>)); _11 = (T)1; _22 = (T)1; _33 = (T)1;}
+
+  explicit Mat3x3(T diag)
+  {
+    constexpr auto c_0 = static_cast<T>(0);
+    _11 = diag; _12 = c_0;  _13 = c_0;
+    _21 = c_0;  _22 = diag; _23 = c_0;
+    _31 = c_0;  _32 = c_0;  _33 = diag;
+  }
+
   T           operator() (size_t Row, size_t Column) const { return m[Row][Column]; }
   T&          operator() (size_t Row, size_t Column) { return m[Row][Column]; }
 
@@ -824,7 +904,7 @@ inline T clamp( const T& v, const T& a, const T& b ) noexcept
   return std::min( b, std::max( a, v ) );
 }
 
-// usefull functions:
+// useful functions:
 template< class T >
 inline Vec2< T > clamp( const Vec2<T>& v, const Vec2<T>& a, const Vec2<T>& b ) noexcept
 {
@@ -845,12 +925,12 @@ inline Vec3< T > clamp( const Vec3<T>& v, const Vec3<T>& a, const Vec3<T>& b )
 
 //radian conversion for float types only:
 template< class T > inline T radians(T v) noexcept;
-template<> inline double radians(double v) noexcept { return v *  0.01745329251994329576923690768489; }
-template<> inline float  radians(float v)  noexcept { return v *  0.01745329251994329576923690768489f; }
+template<> inline constexpr double radians(double v) noexcept { return v *  0.01745329251994329576923690768489; }
+template<> inline constexpr float  radians(float v)  noexcept { return v *  0.01745329251994329576923690768489f; }
 
 template< class T > inline T degrees(T v) noexcept;
-template<> inline double degrees(double v) noexcept { return v *  57.295779513082320876798154814105; }
-template<> inline float  degrees(float v)  noexcept { return v *  57.295779513082320876798154814105f; }
+template<> inline constexpr double degrees(double v) noexcept { return v *  57.295779513082320876798154814105; }
+template<> inline constexpr float  degrees(float v)  noexcept { return v *  57.295779513082320876798154814105f; }
 
 namespace detail
 {

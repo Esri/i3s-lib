@@ -23,4 +23,4 @@ To run the application, you need to specify six parameters:
 * y (lon) resolution of the elevation and color grids (meters / pixel)
 * elevation unit (in meters)
 
-For the images we use, elevation unit is 0.1 m, x and y resolution is 10 m/p for the highest resolution images, 40 m/p for the medium, and 10 m/p for the ones with the lowest resolution.
+For the images we use, elevation unit is 0.1 m, x and y resolution is 10 m/p for the highest resolution images, 40 m/p for the medium, and 160 m/p for the ones with the lowest resolution.

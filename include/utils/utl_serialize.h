@@ -22,7 +22,8 @@ email: contracts@esri.com
 #include "utils/utl_declptr.h"
 #include "utils/utl_i3s_assert.h"
 #include "utils/utl_variant.h"
-#include "utils/utl_geom.h" //TBD
+#include "utils/utl_geom.h" 
+#include "utils/utl_enum_flag_op.h" 
 #include <stdint.h>
 #include <vector>
 #include <sstream>
@@ -39,13 +40,35 @@ email: contracts@esri.com
 
 #define SERIALIZABLE( name ) \
   friend i3slib::utl::Archive_out& operator&( i3slib::utl::Archive_out& ar,  const name& me )   { ar.begin_obj( #name ); const_cast< name& >( me ).serialize( ar ); ar.end_obj(#name); return ar; } \
-  friend i3slib::utl::Archive_in& operator&( i3slib::utl::Archive_in& ar,  name& me )            { ar.begin_obj( #name); me.serialize( ar ); ar.end_obj(#name); return ar; } \
-  static bool has_serializable_macro() { return true; }
+  friend i3slib::utl::Archive_in& operator&( i3slib::utl::Archive_in& ar, name& me ) \
+  {                                   \
+    if (ar.has_parse_error())         \
+      return ar;                      \
+    ar.begin_obj( #name);             \
+    if (ar.has_parse_error())         \
+      return ar;                      \
+    me.serialize( ar );               \
+    if (ar.has_parse_error())         \
+      return ar;                      \
+    ar.end_obj(#name);                \
+    return ar;                        \
+  }                                   \
+  static constexpr bool has_serializable_macro() { return true; }
 
 #define SERIALIZABLE_SPLIT( name ) \
   friend i3slib::utl::Archive_out& operator&( i3slib::utl::Archive_out& ar,  const name& me )   { ar.begin_obj( #name );  const_cast< name& >(me).serialize( ar ); ar.end_obj(#name); return ar; } \
-  friend i3slib::utl::Archive_in& operator&( i3slib::utl::Archive_in& ar,  name& me )     { ar.begin_obj( #name); me.deserialize( ar ); ar.end_obj(#name); return ar; } \
-  static bool has_serializable_macro() { return true; }
+  friend i3slib::utl::Archive_in& operator&( i3slib::utl::Archive_in& ar, name& me ) \
+  {                                   \
+    if (ar.has_parse_error())         \
+      return ar;                      \
+    ar.begin_obj( #name);             \
+    if (ar.has_parse_error())         \
+      return ar;                      \
+    me.deserialize( ar );             \
+    ar.end_obj(#name);                \
+    return ar;                        \
+  }                                   \
+  static constexpr bool has_serializable_macro() { return true; }
 
 namespace i3slib
 {
@@ -54,7 +77,7 @@ namespace utl
 {
 
 //when things go wrong...
-class I3S_EXPORT Json_exception : public std::exception
+class I3S_EXPORT Json_parse_error
 {
 public:
   typedef uint32_t Error_flags_t;
@@ -68,13 +91,14 @@ public:
     Unexpected_object = 32,
     Array_expected = 64,
     Fixed_array_out_of_bound = 128,
-    Object_expected = 256
+    Object_expected = 256,
+    Variant_conversion = 512
   };
 public:
-  Json_exception(Error what, const std::string& where, const std::string& add = std::string());
-  Json_exception(const std::string& w) : m_generic_what(w) {  }
-  Json_exception(const std::exception& e) { m_generic_what = e.what(); }
-  virtual const char* what() const noexcept override { return m_generic_what.c_str(); }
+  Json_parse_error(Error what, const std::string& where, const std::string& add = std::string());
+  Json_parse_error(const std::string& w) : m_generic_what(w) {  }
+  Json_parse_error(const std::exception& e) { m_generic_what = e.what(); }
+  const char* what() const noexcept { return m_generic_what.c_str(); }
   Error         m_type = Error::Not_set;
   std::string   m_where;
   std::string   m_generic_what;
@@ -190,27 +214,36 @@ public:
   virtual void              begin_obj(const char*) {}
   virtual void              end_obj(const char*) {}
   virtual int               version() const = 0;// { return 0; } 
-  virtual void              report_parsing_error(Json_exception::Error what, const std::string& arg);
-  virtual void              push_suppressed_error_mask(Json_exception::Error mask) { m_suppressed_masks.push_back({ (Json_exception::Error_flags_t)mask, (int)m_suppressed_log.size() }); }
-  virtual void              push_suppressed_error_mask(Json_exception::Error_flags_t mask) { m_suppressed_masks.push_back({ mask, (int)m_suppressed_log.size() }); }
-  virtual bool              pop_suppressed_error_mask(Json_exception::Error_flags_t* errors_out = nullptr);
-  virtual void              pop_suppressed_log(std::vector< Json_exception >* errors);
-  friend Archive_in& operator&(Archive_in& in, bool& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, char& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, int8_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, uint8_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, int16_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, uint16_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, int32_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, uint32_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, int64_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, uint64_t& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, float& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, double& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, std::string& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, std::wstring& v) { Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
-  friend Archive_in& operator&(Archive_in& in, Variant& v) { in._load_variant(v); return in; }
-  friend Archive_in& operator&(Archive_in& in, Unparsed_field& v) { in._load_unparsed_node(v); return in; }
+  void                      report_parsing_error(Json_parse_error::Error what, std::string arg);
+  void                      report_parsing_error(Json_parse_error::Error what, const char* arg);
+  virtual void              push_suppressed_error_mask(Json_parse_error::Error mask) { m_suppressed_masks.push_back({ (Json_parse_error::Error_flags_t)mask, (int)m_suppressed_log.size() }); }
+  virtual void              push_suppressed_error_mask(Json_parse_error::Error_flags_t mask) { m_suppressed_masks.push_back({ mask, (int)m_suppressed_log.size() }); }
+  virtual bool              pop_suppressed_error_mask(Json_parse_error::Error_flags_t* errors_out = nullptr);
+  virtual void              pop_suppressed_log(std::vector< Json_parse_error >* errors);
+  bool                      has_parse_error() const;
+  std::string               get_parse_error_string() const;
+  void                      clear_unsuppressed_error();
+  void                      set_basic_parse_error_string(const std::string& s);
+  friend Archive_in& operator&(Archive_in& in, bool& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, char& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, int8_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, uint8_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, int16_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, uint16_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, int32_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, uint32_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, int64_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, uint64_t& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, float& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, double& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  friend Archive_in& operator&(Archive_in& in, std::string& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+  
+#ifdef PCSL_WIDE_STRING_OS
+  friend Archive_in& operator&(Archive_in& in, std::wstring& v) { if (in.has_parse_error()) return in; Variant wrap(&v, Variant::Memory::Shared);  in._load_variant(wrap); return in; }
+#endif
+
+  friend Archive_in& operator&(Archive_in& in, Variant& v) { if (in.has_parse_error()) return in; in._load_variant(v); return in; }
+  friend Archive_in& operator&(Archive_in& in, Unparsed_field& v) { if (in.has_parse_error()) return in; in._load_unparsed_node(v); return in; }
 
   template< class T > friend Archive_in& operator&(Archive_in& in, Enum_str<T>& v);
   template< class T > friend Archive_in& operator&(Archive_in& in, Infinite_number<T>& v);
@@ -224,7 +257,10 @@ protected:
   virtual bool    _open_tag_name(const char*) = 0;
   virtual bool    _try_open_tag_name(const char*) = 0; //no throw version...
   virtual bool    _close_tag_name(const char*) = 0;
-  virtual bool    _read_seq_separator(int idx) = 0;
+  virtual int     _open_sequence() = 0;  // returns the sequence size and if non empty sets the first sequence element as current
+  virtual int     _read_seq_separator() = 0; // advances the current element to a next in an array/dictionary
+                                            // and returns the number of elements remaining in the array
+                                            // including the current one
   virtual void    _load_variant(Variant& v) = 0;
   virtual void    _load_binary_blob(Binary_blob& blob) = 0;
   //virtual int     _load_array_size() = 0;
@@ -232,25 +268,34 @@ protected:
   virtual void    _load_unparsed_node(Unparsed_field& node) = 0;
   virtual std::string       _get_locator() const { return std::string(); } //experimental for better error reporting.
   virtual int     _get_rtti_code() = 0;
-  struct Supressed_error
+  struct Parse_error
   {
-    Json_exception::Error what;
+    Json_parse_error::Error what;
     std::string location;
     std::string arg;
   };
   struct Mask_item
   {
-    Json_exception::Error_flags_t what = 0;
+    Json_parse_error::Error_flags_t what = 0;
     int stack_0 = 0;
   };
   std::vector<Mask_item> m_suppressed_masks = { {0,0} };
-  std::vector<Supressed_error>  m_suppressed_log;
+  std::vector<Parse_error>  m_suppressed_log;
+  Parse_error m_unsuppressed_error = {Json_parse_error::Error::Not_set, "", ""};
+  std::string m_basic_parse_error_string = "";
+private:
+  bool has_unsuppressed_error() const;
+
 };
 
 
 // -------------------------------------------------------------------------------
 //            class Archive_out 
 // -------------------------------------------------------------------------------
+
+enum class Archive_out_flags : int { None = 0, Force_write_default_value = 1 };
+SLL_DEFINE_ENUM_FLAG_OPERATORS(Archive_out_flags);
+
 
 // Abract base class for output Archive.
 class I3S_EXPORT Archive_out
@@ -285,13 +330,15 @@ public:
   template< class T > friend Archive_out& operator&(Archive_out& out, const std::vector< T >& v);
   template< class T > friend Archive_out& operator&(Archive_out& out, const Nvp< T >& v);
   template< class T, class Y > friend  Archive_out& operator&(Archive_out& out, const Nvp_opt< T, Y >& v);
+  inline constexpr void          set_flags(Archive_out_flags flags) { m_flags = flags; }
   //for symmetry with Archive_in:
-  inline constexpr void          report_parsing_error(Json_exception::Error, const std::string&) noexcept {}
-  inline constexpr void          push_suppressed_error_mask(Json_exception::Error)noexcept {}
-  inline constexpr void          push_suppressed_error_mask(Json_exception::Error_flags_t) noexcept {}
-  inline constexpr bool          pop_suppressed_error_mask(Json_exception::Error_flags_t* = nullptr) { return false; }
-  inline constexpr bool          pop_suppressed_error_if_single(Json_exception::Error) noexcept { return false; }
-  inline constexpr void          pop_suppressed_log(std::vector< Json_exception >*) {}
+  inline constexpr void          report_parsing_error(Json_parse_error::Error, const std::string&) noexcept {}
+  inline constexpr void          report_parsing_error(Json_parse_error::Error, const char*) noexcept {}
+  inline constexpr void          push_suppressed_error_mask(Json_parse_error::Error)noexcept {}
+  inline constexpr void          push_suppressed_error_mask(Json_parse_error::Error_flags_t) noexcept {}
+  inline constexpr bool          pop_suppressed_error_mask(Json_parse_error::Error_flags_t* = nullptr) { return false; }
+  inline constexpr bool          pop_suppressed_error_if_single(Json_parse_error::Error) noexcept { return false; }
+  inline constexpr void          pop_suppressed_log(std::vector< Json_parse_error >*) {}
 protected:
   virtual bool    _open_tag_name(const char*) = 0;
   virtual bool    _close_tag_name(const char*) = 0;
@@ -299,14 +346,13 @@ protected:
   virtual void    _write_seq_separator() = 0;
   virtual void    _close_seq() {};
   virtual void    _save_variant(const Variant& v) = 0;
-  //virtual bool    _save_array_size(int s) = 0;
-  //virtual void    _save_array(const char* ptr, int n_bytes) = 0;
   virtual void    _save_binary_blob(const Binary_blob_const& blob) = 0;
   virtual void    _save_unparsed_node(utl::Unparsed_field& node) = 0;
   virtual void    _set_rtti_code(int code) = 0;
+  Archive_out_flags m_flags { 0 };
 };
 
-
+//void  Archive_out::force_optional_alway_write(bool force) { if (force) m_flags |= (uint32_t)Out_flags::Force_write_default_value; else m_flags &= (~(uint32_t)Out_flags::Force_write_default_value); }
 
 
 // -------------------------------------------------------------------------------
@@ -460,7 +506,80 @@ struct has_serialize {
 //        class Archive_in  **** inline implementation: **** 
 // ------------------------------------------------------------------------------------
 
-inline void  Archive_in::pop_suppressed_log(std::vector< Json_exception >* errors)
+inline bool  Archive_in::has_parse_error() const
+{
+  return !m_basic_parse_error_string.empty() || has_unsuppressed_error();
+}
+
+inline bool  Archive_in::has_unsuppressed_error() const
+{
+  return m_unsuppressed_error.what != Json_parse_error::Error::Not_set;
+}
+
+inline void  Archive_in::clear_unsuppressed_error()
+{
+  m_unsuppressed_error = { Json_parse_error::Error::Not_set, "", "" };
+}
+
+inline void Archive_in::set_basic_parse_error_string(const std::string& s)
+{
+  m_basic_parse_error_string = s;
+}
+
+inline std::string Archive_in::get_parse_error_string() const
+{
+  utl::Json_parse_error::Error what = m_unsuppressed_error.what;
+  std::string where = m_unsuppressed_error.location;
+  std::string add = m_unsuppressed_error.arg;
+
+  std::string ret("");
+
+  switch (what)
+  {
+  case utl::Json_parse_error::Error::Not_found:
+    ret = "JSON node not found:\"" + where + "\"";
+    break;
+  case utl::Json_parse_error::Error::Scope_error:
+    ret = "JSON Object scope error: \"" + where + "\"";
+    break;
+    break;
+  case utl::Json_parse_error::Error::Unnamed_field_not_object:
+    ret = "JSON Object is expected for anonynous field:\"" + where + "\"";
+    break;
+  case utl::Json_parse_error::Error::Unknown_enum:
+    ret = "JSON string \"" + where + "\" is not a known value for this enumeration (" + add + ")";
+    break;
+  case utl::Json_parse_error::Error::Unexpected_array:
+    ret = "\"Unexpected JSON array: \"" + where + "\"";
+    break;
+  case utl::Json_parse_error::Error::Unexpected_object:
+    ret = "\"Unexpected JSON object: \"" + where + "\"";
+    break;
+  case utl::Json_parse_error::Error::Array_expected:
+    ret = "\"JSON array expected: \"" + where + "\"";
+    break;
+  case utl::Json_parse_error::Error::Fixed_array_out_of_bound:
+    ret = "\"JSON array \"" + where + "\" must be of size \"" + add + "\"";
+    break;
+  case utl::Json_parse_error::Error::Object_expected:
+    ret = "\"Object expected: \"" + where + "\"";
+    break;
+  case utl::Json_parse_error::Error::Variant_conversion:
+    ret = add;// +" (" + where + ")";
+    break;
+  case utl::Json_parse_error::Error::Not_set:
+    {
+      // There is no unsuppressed error, which means the parse failure
+      // was a basic failure to adhere to the JSON spec.
+      I3S_ASSERT_EXT(!m_basic_parse_error_string.empty());
+      ret = m_basic_parse_error_string;
+      break;
+    }
+  }
+  return ret;
+}
+
+inline void  Archive_in::pop_suppressed_log(std::vector< Json_parse_error >* errors)
 {
   errors->clear();
   errors->reserve(m_suppressed_log.size());
@@ -470,14 +589,14 @@ inline void  Archive_in::pop_suppressed_log(std::vector< Json_exception >* error
   }
   m_suppressed_log.clear();
 }
-inline bool Archive_in::pop_suppressed_error_mask(Json_exception::Error_flags_t* errors_out)
+inline bool Archive_in::pop_suppressed_error_mask(Json_parse_error::Error_flags_t* errors_out)
 {
   I3S_ASSERT_EXT(m_suppressed_masks.size());
-  Json_exception::Error_flags_t out = 0;
+  Json_parse_error::Error_flags_t out = 0;
   int count = 0;
   for (auto iter = m_suppressed_log.begin() + m_suppressed_masks.back().stack_0; iter < m_suppressed_log.end(); ++iter)
   {
-    out |= static_cast<Json_exception::Error_flags_t>(iter->what);
+    out |= static_cast<Json_parse_error::Error_flags_t>(iter->what);
     ++count;
   }
   //auto count = (int)m_suppressed_log.size() - m_suppressed_masks.back().stack_0 ;
@@ -487,35 +606,50 @@ inline bool Archive_in::pop_suppressed_error_mask(Json_exception::Error_flags_t*
   return count > 0;
 }
 
-inline void Archive_in::report_parsing_error(Json_exception::Error what, const std::string& arg)
+inline void Archive_in::report_parsing_error(Json_parse_error::Error what, const char* arg)
 {
-  if (m_suppressed_masks.back().what & ((Json_exception::Error_flags_t)what))
+  report_parsing_error(what, arg ? std::string(arg) : std::string());
+}
+
+inline void Archive_in::report_parsing_error(Json_parse_error::Error what, std::string arg)
+{
+  if (m_suppressed_masks.back().what & ((Json_parse_error::Error_flags_t)what))
   {
     //suppressed error are still recorded:
-    m_suppressed_log.push_back({ what, _get_locator(), arg });
+    m_suppressed_log.push_back({ what, _get_locator(), std::move(arg) });
   }
   else
   {
-    throw Json_exception(what, _get_locator(), arg);
+    // The framework should prevent adding an unsupressed error when there already is one.
+    // If there is already an unsupressed error deserialization should be a series of 
+    // no-ops until the root read call is reached.
+    I3S_ASSERT(!has_unsuppressed_error());
+    m_unsuppressed_error = { what, _get_locator(), std::move(arg)};
   }
 }
 
 template< class T > inline Archive_in& operator&(Archive_in& in, Enum_str<T>& v)
 {
+  if (in.has_parse_error()) return in;
+
   std::string tmp;
   Variant wrap(&tmp, Variant::Memory::Shared);
   in._load_variant(wrap);
+  if (in.has_parse_error()) return in;
   if (!from_string(tmp, &v.val_ref))
   {
-    in.report_parsing_error(Json_exception::Error::Unknown_enum, tmp);
+    in.report_parsing_error(Json_parse_error::Error::Unknown_enum, tmp);
   }
   return in;
 }
 
 template< class T > inline Archive_in& operator&(Archive_in& in, Infinite_number<T>& v)
 {
+  if (in.has_parse_error()) return in;
+
   Variant wrap;
   in._load_variant(wrap);
+  if (in.has_parse_error()) return in;
   switch (wrap.get_type())
   {
   case Variant_trait::Type::String:
@@ -540,26 +674,43 @@ template< class T > inline Archive_in& operator&(Archive_in& in, Infinite_number
 
 template< class T > inline Archive_in& operator&(Archive_in& in, Sequence<T>& sq)
 {
+  if (in.has_parse_error()) return in;
+
   detail::clear_vec(sq.vec);
-  int i = 0;
-  bool is_oob = false;
-  while (in._read_seq_separator(i))
+  if (auto sq_size = in._open_sequence())
   {
-    if (detail::resize_vec(sq.vec, i + 1))
-      in& sq.vec[i];
-    else if (!is_oob)
+    if (!detail::resize_vec(sq.vec, sq_size))
     {
-      in.report_parsing_error(Json_exception::Error::Fixed_array_out_of_bound, std::to_string(i));
-      is_oob = true;
+      // skip the entire sequence
+      while(in._read_seq_separator())
+      {}
+      // detect the minimal unexpected size
+      int unexpected_size = 2;
+      while (detail::resize_vec(sq.vec, unexpected_size)) ++unexpected_size;
+      // report the expected size as unexpected minus 1
+      in.report_parsing_error(Json_parse_error::Error::Fixed_array_out_of_bound, std::to_string(unexpected_size - 1));
+      return in;
     }
-    ++i;
+    for (int i = 0;; ++i)
+    {
+      I3S_ASSERT(i < sq_size);
+      in & sq.vec[i];
+      if (in.has_parse_error()) 
+        return in;
+      if (!in._read_seq_separator())
+        break;
+    }    
   }
   return in;
 }
 
 template< typename T > inline Archive_in& operator&(Archive_in& in, std::shared_ptr<T>& v)
 {
+  if (in.has_parse_error()) return in;
+
   int code = in._get_rtti_code();
+  if (in.has_parse_error()) return in;
+
   std::shared_ptr<T> obj = T::create_from_rtti_code(code);
   if (obj)
   {
@@ -571,6 +722,8 @@ template< typename T > inline Archive_in& operator&(Archive_in& in, std::shared_
 
 template< class T > inline Archive_in& operator&(Archive_in& in, std::vector< T >& v)
 {
+  if (in.has_parse_error()) return in;
+
   Writable_blob_wrap<std::vector< T > > wrap(&v);
   in._load_binary_blob(wrap);
   return in;
@@ -581,7 +734,10 @@ template< class T > inline Archive_in& operator&(Archive_in& in, std::vector< T 
   //return in;
 }
 
-template< class T > inline Archive_in& operator&(Archive_in& in, Nvp< T >&& v) {
+template< class T > inline Archive_in& operator&(Archive_in& in, Nvp< T >&& v) 
+{
+  if (in.has_parse_error()) return in;
+
   //will throw() if required field is missing:
   if (in._open_tag_name(v.name))
   {
@@ -593,7 +749,10 @@ template< class T > inline Archive_in& operator&(Archive_in& in, Nvp< T >&& v) {
 }
 
 
-template< class T, class Y > inline Archive_in& operator&(Archive_in& in, Nvp_opt< T, Y >&& v) {
+template< class T, class Y > inline Archive_in& operator&(Archive_in& in, Nvp_opt< T, Y >&& v) 
+{
+  if (in.has_parse_error()) return in;
+
   //will throw() if required, false if optional and missing:
   if (in._try_open_tag_name(v.name))
   {
@@ -680,7 +839,9 @@ template< class T > inline  Archive_out& operator&(Archive_out& out, const Nvp< 
 
 template< class T, class Y > inline  Archive_out& operator&(Archive_out& out, const Nvp_opt< T, Y >& v)
 {
-  if (v.mode == Serialize_field_mode::Optional_skip_if_default && v.default_value == v.val)
+  if (v.mode == Serialize_field_mode::Optional_skip_if_default 
+    && v.default_value == v.val 
+    && !is_set( out.m_flags,  Archive_out_flags::Force_write_default_value) )
     return out; //Skip if value is default.
 
   if (out._open_tag_name(v.name))

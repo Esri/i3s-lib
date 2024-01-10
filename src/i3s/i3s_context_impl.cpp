@@ -21,11 +21,12 @@ email: contracts@esri.com
 
 #include "utils/utl_jpeg.h"
 #include "utils/utl_png.h"
-#include "utils/utl_geographic.h"
 #include "i3s/i3s_writer.h"
 #include "utils/utl_image_2d.h"
 #include "i3s/i3s_legacy_mesh.h"
 #include "lepcc_tpl_api.h"
+#include "utils/utl_geographic.h"
+
 #include <stdint.h>
 
 #ifndef NO_ETC2_SUPPORT
@@ -40,6 +41,10 @@ email: contracts@esri.com
 #include "utils/dxt/utl_dxt_mipmap_dds.h"
 #endif
 
+#if !defined (NO_BASIS_ENCODER_SUPPORT) || !defined (NO_BASIS_TRANSCODER_SUPPORT)
+#include "utils/utl_libbasis_api.h"
+#endif
+
 namespace i3slib
 {
 
@@ -50,6 +55,8 @@ namespace i3s
 
 namespace
 {
+
+
 
 void add_alpha_to_rgb(const uint8_t* rgb, uint32_t pixel_count, uint8_t* rgba, uint8_t alpha)
 {
@@ -74,10 +81,13 @@ static bool  compress_to_dds_with_mipmaps(const Texture_buffer& img, Texture_buf
   const auto h = img.height();
   utl::Image_2d src;
 
-  if(img.meta.format == Image_format::Raw_rgb8)
+  if (img.meta.format == Image_format::Raw_rgb8)
   {
     src = utl::Image_2d::create_aligned(w, h);
-    add_alpha_to_rgb(reinterpret_cast<const uint8_t*>(img.data.data()), w * h, static_cast<uint8_t*>(src.data()), 255);
+    if (!src.data())
+      return false;
+
+    add_alpha_to_rgb(reinterpret_cast<const uint8_t*>(img.data.data()), w* h, static_cast<uint8_t*>(src.data()), 255);
   }
   else
   {
@@ -85,6 +95,8 @@ static bool  compress_to_dds_with_mipmaps(const Texture_buffer& img, Texture_buf
 
     //deep copy, since dds compressor will modify the input ( in-place mipmap)
     src = utl::Image_2d::create_aligned(w, h, img.data.data(), img.data.size());
+    if (!src.data())
+      return false;
   }
 
   utl::Buffer_view< char > dds;
@@ -101,9 +113,9 @@ static bool  compress_to_dds_with_mipmaps(const Texture_buffer& img, Texture_buf
 }
 #endif // --------------------------- end DXT encoder support -----
 
-void _to_relative(const utl::Vec3d& origin, const  utl::Vec3d* src, utl::Vec3f * dst, size_t count)
+void _to_relative(const utl::Vec3d& origin, const  utl::Vec3d* src, utl::Vec3f* dst, size_t count)
 {
-  for(size_t i=0; i < count;++i)
+  for (size_t i = 0; i < count; ++i)
     dst[i] = utl::Vec3f(src[i] - origin);
 }
 
@@ -112,7 +124,7 @@ i3s::Mesh_abstract::Ptr decode_lepcc(const utl::Vec3d& origin, const utl::Raw_bu
   std::vector< utl::Vec3d > abs_points;
   if (lepcc::decodeXYZ(src, &abs_points) != lepcc::ErrCode::Ok)
     return nullptr;
- 
+
   // to relative position (in place: )
   auto rel_pos_ptr = reinterpret_cast<utl::Vec3f*>(abs_points.data());
   _to_relative(origin, abs_points.data(), rel_pos_ptr, abs_points.size());
@@ -164,8 +176,8 @@ extern "C"
         *idx_out = (uint32_t*)dst.colors.index.data();
         break;
       case utl::draco_attrib_type_t::Fid:
-        I3S_ASSERT(value_stride == sizeof(uint32_t));
-        dst.fids.values = utl::Buffer::create_writable_typed_view<uint32_t>(value_count);
+        I3S_ASSERT(value_stride == sizeof(uint64_t));
+        dst.fids.values = utl::Buffer::create_writable_typed_view<uint64_t>(value_count);
         dst.fids.index = utl::Buffer::create_writable_typed_view<uint32_t>(index_count);
         *val_out = (char*)(dst.fids.values.data());
         *idx_out = (uint32_t*)dst.fids.index.data();
@@ -176,6 +188,15 @@ extern "C"
         dst.uv_region.index = utl::Buffer::create_writable_typed_view<uint32_t>(index_count);
         *val_out = (char*)(dst.uv_region.values.data());
         *idx_out = (uint32_t*)dst.uv_region.index.data();
+        break;
+      case utl::draco_attrib_type_t::Anchor_point_fid_index:
+        I3S_ASSERT(value_stride == sizeof(Anchor_point_fid_index));
+        dst.anchor_point_fid_indices.values = utl::Buffer::create_writable_typed_view<Anchor_point_fid_index>(value_count);
+        *val_out = (char*)(dst.anchor_point_fid_indices.values.data());
+        break;
+      case utl::draco_attrib_type_t::Anchor_points:
+        dst.rel_anchor_points.values = utl::Buffer::create_writable_typed_view<utl::Vec3f>(value_count);
+        *val_out = (char*)(dst.rel_anchor_points.values.data());
         break;
       case utl::draco_attrib_type_t::Fid_index:
         I3S_ASSERT(false); //should not call.
@@ -191,13 +212,13 @@ extern "C"
   }
 }
 
-
 Mesh_abstract::Ptr decode_draco(const utl::Vec3d& origin, const utl::Raw_buffer_view& draco)
 {
-  auto src_data = const_cast< char*>(draco.data());
+  auto src_data = const_cast<char*>(draco.data());
   Mesh_bulk_data::Var dst = std::make_unique<Mesh_bulk_data>();
   dst->origin = origin;
-  if (utl::draco_decompress_mesh(src_data, draco.size(), (utl::draco_mesh_handle_t)dst.get(), draco_create_mesh_attribute_impl))
+  Has_fids fids{ Has_fids::No };
+  if (utl::draco_decompress_mesh(src_data, draco.size(), (utl::draco_mesh_handle_t)dst.get(), draco_create_mesh_attribute_impl, fids))
   {
     return Mesh_abstract::Ptr(parse_mesh_from_bulk(*dst));
   }
@@ -210,14 +231,22 @@ char* draco_create_buffer_impl(int size)
 }
 
 template< class T >
-utl::Buffer_view< const T >  to_unindexed(const Mesh_attrb<T>& src)
+utl::Buffer_view< const T >  to_unindexed(const Mesh_attrb<T>& src, T scale = T(1))
 {
-  if (src.index.size() == 0)
+  const bool no_scale = scale == T(1);
+  if (src.index.size() == 0 && no_scale)
     return src.values;
 
-  auto ret = utl::Buffer::create_writable_typed_view<T>(src.index.size());
-  for (int i = 0; i < src.index.size(); ++i)
-    ret[i] = src[i];
+  const int n = src.size();
+  auto ret = utl::Buffer::create_writable_typed_view<T>(n);
+
+  if( no_scale )
+    for (int i = 0; i<n; ++i)
+      ret[i] = src[i];
+  else
+    for (int i = 0; i < n; ++i)
+      ret[i] = src[i] * scale;
+
   utl::Buffer_view< const T > what;
   what.operator=(ret);
   return what;
@@ -249,16 +278,15 @@ struct Unindexed_mesh
     return dm;
   }
 };
-
-static bool compress_to_draco(const Mesh_abstract& src, utl::Raw_buffer_view* out, double scale_x, double scale_y)
+// Note: scalex/y will be applied to src.relative_position .
+static bool compress_to_draco(const Mesh_abstract& src, utl::Raw_buffer_view* out, Has_fids & fids, double scale_x, double scale_y)
 {
   //draco_compressed_buffer dst;
   Unindexed_mesh um;
-  um.rel_pos = to_unindexed(src.get_relative_positions());
+  um.rel_pos = to_unindexed(src.get_relative_positions(), utl::Vec3f((float)scale_x, (float)scale_y, 1.0f));
   um.normals = to_unindexed(src.get_normals());
   um.uvs = to_unindexed(src.get_uvs(0));
   um.colors = to_unindexed(src.get_colors());
-  //um.fid_indices = to_unindexed(src.get_feature_ids());
   um.uv_regions = to_unindexed(src.get_regions());
 
   utl::draco_i3s_mesh  dm = um.as_draco_struct();
@@ -272,16 +300,12 @@ static bool compress_to_draco(const Mesh_abstract& src, utl::Raw_buffer_view* ou
 
   char* ptr_out = nullptr;
   int  size = 0;
-  if (utl::draco_compress_mesh(&dm, draco_create_buffer_impl, &ptr_out, &size, src.get_topology() == i3slib::i3s::Mesh_topology::Triangles))
+  if (utl::draco_compress_mesh(&dm, draco_create_buffer_impl, &ptr_out, &size, fids, src.get_topology() == i3slib::i3s::Mesh_topology::Triangles))
   {
-    //utl::Buffer::Ptr buffer = std::make_shared< utl::Buffer>(ptr_out, size, utl::Buffer::Memory::Deep);
-    //*out = utl::Buffer::create_and_own(ptr_out, size);
     *out = utl::Buffer::move_exising(&ptr_out, size);
     return true;
   }
-  //I3S_ASSERT(false);
   return false;
-
 }
 
 #endif // -------------------------- end draco----------------------
@@ -377,28 +401,111 @@ static bool compress_to_ktx_with_mipmaps(const Texture_buffer& img, Texture_buff
 #endif // --------------------------- end ETC2 ----------------------
 
 
-#ifndef WASM
-static bool  decode_jpeg(const utl::Raw_buffer_view& jpeg, Texture_buffer* img_out)
+#ifndef NO_BASIS_ENCODER_SUPPORT
+
+static bool compress_to_basis_ktx2_with_mipmaps(const i3s::Texture_buffer& img, i3s::Texture_buffer* basis_buffer)
 {
-  bool has_alpha;
-  std::string output;
-  utl::Buffer_view<char> raw_rgba;
-  if (utl::decompress_jpeg(jpeg.data(), jpeg.size(), &raw_rgba, &img_out->meta.mip0_width, &img_out->meta.mip0_height, &has_alpha))
+  if (img.meta.format != i3s::Image_format::Raw_rgba8
+    && img.meta.format != i3s::Image_format::Raw_rgb8)
   {
-    img_out->meta.format = Image_format::Raw_rgba8;
-    img_out->data = raw_rgba;
-    img_out->meta.mip_count = 1;
-    //TODO: check is it's mask or full transparency !
-    img_out->meta.alpha_status = has_alpha ? Texture_meta::Alpha_status::Mask_or_blend : Texture_meta::Alpha_status::Opaque;
-    return true;
+    I3S_ASSERT(false);
+    return false;
+  }
+
+  std::string basis;
+  if (!utl::compress_to_basis_with_mips(img.data.data()
+    , img.width(), img.height()
+    , img.meta.format == i3s::Image_format::Raw_rgb8 ? 3 : 4
+    , basis)
+    )
+    return false;
+
+  basis_buffer->data = utl::Buffer::create_deep_copy(basis.data(), (int)basis.size());
+  basis_buffer->meta = img.meta;
+  basis_buffer->meta.mip_count = -1; // Don't know yet
+  basis_buffer->meta.format = i3s::Image_format::Ktx2;
+
+  return true;
+}
+
+// TODO: eliminate i3s::Image_format::Basis and the function
+static bool compress_to_basis_with_mipmaps(const i3s::Texture_buffer& img, i3s::Texture_buffer* basis_buffer)
+{
+  bool res = compress_to_basis_ktx2_with_mipmaps(img, basis_buffer);
+  basis_buffer->meta.format = i3s::Image_format::Basis;
+  return res;
+}
+
+#endif // NO_BASIS_ENCODER_SUPPORT
+
+#ifndef NO_BASIS_TRANSCODER_SUPPORT
+static bool transcode_basis(const Texture_buffer& img, Texture_buffer* dds_buffer, Image_format to_img_fmt)
+{
+  if (img.meta.format == Image_format::Basis || img.meta.format == Image_format::Ktx2)
+  {
+    I3S_ASSERT_EXT((int)img.meta.alpha_status != -1); // ALPHA status must have been set at this point.
+    std::vector<uint8_t> out_buffer;
+
+    if (to_img_fmt == Image_format::Dds)
+    {
+      utl::transcode_basis_to_dds(img.data.data(), img.data.size(), &out_buffer, img.meta.alpha_status != Texture_meta::Alpha_status::Opaque);
+
+      dds_buffer->data = utl::Buffer::create_deep_copy((const char*)out_buffer.data(), (int)out_buffer.size());
+      dds_buffer->meta = img.meta;
+      dds_buffer->meta.mip_count = -1; //dunno. 
+      dds_buffer->meta.format = to_img_fmt;
+
+      return true;
+    }
+    else if (to_img_fmt == Image_format::Ktx)
+    {
+      utl::transcode_basis_to_ktx(img.data.data(), img.data.size(), &out_buffer, img.meta.alpha_status != Texture_meta::Alpha_status::Opaque);
+
+      dds_buffer->data = utl::Buffer::create_deep_copy((const char*)out_buffer.data(), (int)out_buffer.size());
+      dds_buffer->meta = img.meta;
+      dds_buffer->meta.mip_count = -1; //dunno. 
+      dds_buffer->meta.format = to_img_fmt;
+
+      return true;
+    }
   }
   return false;
 }
 
-bool  get_jpeg_size(const utl::Raw_buffer_view& jpeg, int* w, int* h)
+static bool get_basis_info(const utl::Raw_buffer_view& basis, int* mip0_w, int* mip0_h, int* mipmap_count)
 {
-  return utl::get_jpeg_size(jpeg.data(), jpeg.size(), w, h);
+  return utl::get_basis_image_info(basis.data(), basis.size(), mip0_w, mip0_h, mipmap_count);
 }
+#endif // NO_BASIS_TRANSCODER_SUPPORT
+
+#ifndef WASM
+static bool decode_jpeg(const utl::Raw_buffer_view& jpeg, Texture_buffer* img_out)
+{
+  bool has_alpha;
+  std::string output;
+  utl::Buffer_view<char> raw_rgba;
+  if (!utl::decompress_jpeg(jpeg.data(), jpeg.size(), &raw_rgba, &img_out->meta.mip0_width, &img_out->meta.mip0_height, &has_alpha))
+    return false;
+
+  if (!raw_rgba.is_valid())
+  {
+    I3S_ASSERT(false);
+    return false;
+  }
+
+  img_out->meta.format = Image_format::Raw_rgba8;
+  img_out->data = raw_rgba;
+  img_out->meta.mip_count = 1;
+  //TODO: check is it's mask or full transparency !
+  img_out->meta.alpha_status = has_alpha ? Texture_meta::Alpha_status::Mask_or_blend : Texture_meta::Alpha_status::Opaque;
+  return true;
+}
+
+bool  get_jpeg_size(const utl::Raw_buffer_view& jpeg, int* w, int* h, int max_tex_dim = -1)
+{
+  return utl::get_jpeg_size(jpeg.data(), jpeg.size(), w, h, max_tex_dim);
+}
+
 static bool  decode_png(const utl::Raw_buffer_view& jpeg, Texture_buffer* img_out)
 {
   bool has_alpha;
@@ -416,16 +523,16 @@ static bool  decode_png(const utl::Raw_buffer_view& jpeg, Texture_buffer* img_ou
   return false;
 }
 
-bool  get_png_size(const utl::Raw_buffer_view& jpeg, int* w, int* h)
+bool  get_png_size(const utl::Raw_buffer_view& jpeg, int* w, int* h, int max_tex_dim)
 {
+  // TODO max_tex_dim is ignored for now.
   return utl::get_png_size(jpeg.data(), jpeg.size(), w, h);
 }
 #endif
 
 Context::Ptr     create_minimal_reader_context(const Ctx_properties& prop)
 {
-  Context::Ptr ctx = std::make_shared< Context >();
-  ctx->m_prop = prop;
+  Context::Ptr ctx = std::make_shared< Context >(prop);
 
 #ifndef WASM
   //decoder:
@@ -433,7 +540,6 @@ Context::Ptr     create_minimal_reader_context(const Ctx_properties& prop)
   ctx->get_jpeg_size = get_jpeg_size;
   ctx->decode_png = decode_png;
   ctx->get_png_size = get_png_size;
-  ctx->m_prop = prop;
   ctx->m_tracker = prop.tracker;
 
   ctx->decode_lepcc = decode_lepcc;
@@ -445,6 +551,24 @@ Context::Ptr     create_minimal_reader_context(const Ctx_properties& prop)
 #endif
   set_gpu_compression(ctx->m_prop.gpu_tex_encoding_support, GPU_texture_compression::DXT_BC_ALL, (bool)ctx->encode_to_dxt_with_mips);
 
+  bool outputing_basis = false; //if for testing purpose outputing basis is still needed set this flag true.
+#ifndef NO_BASIS_TRANSCODER_SUPPORT
+  if (ctx->m_prop.gpu_tex_encoding_support & (GPU_texture_compression_flags)GPU_texture_compression::Basis)
+    outputing_basis = true;
+  if (ctx->m_prop.gpu_tex_encoding_support & (GPU_texture_compression_flags)GPU_texture_compression::KTX2 || outputing_basis)
+      ctx->transcode_basis = transcode_basis;
+
+  ctx->get_basis_info = get_basis_info;
+  if ((ctx->m_prop.gpu_tex_rendering_support & (GPU_texture_compression_flags)GPU_texture_compression::Basis) ||
+    (ctx->m_prop.gpu_tex_rendering_support & (GPU_texture_compression_flags)GPU_texture_compression::KTX2))
+  {
+    ctx->transcode_basis = transcode_basis;
+  }
+#endif
+
+  set_gpu_compression(ctx->m_prop.gpu_tex_encoding_support, GPU_texture_compression::Basis, (bool)ctx->transcode_basis && outputing_basis);
+  set_gpu_compression(ctx->m_prop.gpu_tex_encoding_support, GPU_texture_compression::KTX2, (bool)ctx->transcode_basis);
+  
 #ifndef NO_DRACO_SUPPORT
   if (ctx->m_prop.geom_decoding_support & (Geometry_compression_flags)Geometry_compression::Draco)
     ctx->decode_draco = decode_draco;
@@ -477,35 +601,52 @@ static bool raw_to_jpg(const Texture_buffer& img, Texture_buffer* dst)
 
 static bool raw_to_png(const Texture_buffer& img, Texture_buffer* dst)
 {
-  //todo
-  I3S_ASSERT_EXT(false);
-  return false;
+  I3S_ASSERT(img.meta.format == Image_format::Raw_rgb8 || img.meta.format == Image_format::Raw_rgba8);
+  I3S_ASSERT(img.meta.mip_count == 1 && img.width() > 0 && img.height() > 0);
+
+  std::vector<uint8_t> png_blob;
+  if (!utl::encode_png(
+        reinterpret_cast<const uint8_t*>(img.data.data()),
+        img.width(),
+        img.height(),
+        img.meta.format == Image_format::Raw_rgba8,
+        png_blob))
+    return false;
+
+  dst->data =
+    utl::Buffer::create_deep_copy<char>(
+      reinterpret_cast<const char*>(png_blob.data()),
+      static_cast<int>(png_blob.size()));
+
+  dst->meta = img.meta;
+  dst->meta.format = Image_format::Png;
+  return true;
 }
 
-namespace
+// -----------------------------------------------------------------------------
+//    class     Spatial_reference_helper_default
+// -----------------------------------------------------------------------------
+
+Spatial_reference_xform::Status_t Spatial_reference_xform_cartesian_only::transform(Spatial_reference_xform::Sr_type src, Spatial_reference_xform::Sr_type dst, utl::Vec3d* xyz, int count) const
 {
-
-struct Legacy_cartesian_transformation : public i3s::Cartesian_transformation
-{
-public:
-
-  virtual bool to_cartesian(const i3s::Spatial_reference& sr, utl::Vec3d* xyz, int count) override
+  if ((src == Sr_type::Src_cartesian && dst == Sr_type::Src_sr)
+      || (src == Sr_type::Dst_cartesian && dst == Sr_type::Dst_sr))
   {
-    if (sr.is_vanilla_wgs64())
-      utl::geodetic2ECEF(xyz, count);
-
-    return true;
-  }
-
-  virtual bool from_cartesian(const i3s::Spatial_reference& sr, utl::Vec3d* xyz, int count) override
-  {
-    if (sr.is_vanilla_wgs64())
+    if (Spatial_reference::is_well_known_gcs(m_src))
       utl::ECEF2geodetic(xyz, count);
-
-    return true;
+    return Status_t::Ok;
   }
-};
+  if ((src == Sr_type::Src_sr && dst == Sr_type::Src_cartesian)
+      || (src == Sr_type::Dst_sr && dst == Sr_type::Dst_cartesian))
+  {
+    if (Spatial_reference::is_well_known_gcs(m_src))
+      utl::geodetic2ECEF(xyz, count);
+    return Status_t::Ok;
+  }
+  if (src == Sr_type::Src_sr && dst == Sr_type::Dst_sr)
+    return Status_t::Ok; // no xform sonce src == dst
 
+  return Status_t::No_implementation;
 }
 
 // -----------------------------------------------------------------------------
@@ -515,19 +656,8 @@ struct Builder_context_impl : public Writer_context
 {
   DECL_PTR(Builder_context_impl);
 
-  Builder_context_impl(const Ctx_properties& prop, Cartesian_transformation::Ptr cs_transform)
+  explicit Builder_context_impl(const Ctx_properties& prop)
   {
-    if (!cs_transform)
-      cs_transform.reset(new Legacy_cartesian_transformation);
-
-    to_cartesian_space =
-      [cs_transform](const Spatial_reference& sr, utl::Vec3d* xyz, int count)
-      { return cs_transform->to_cartesian(sr, xyz, count); };
-      
-    from_cartesian_space =
-      [cs_transform](const Spatial_reference& sr, utl::Vec3d* xyz, int count)
-      { return cs_transform->from_cartesian(sr, xyz, count); };
-
     decoder = create_minimal_reader_context(prop);
 
     //typedef std::function< bool(const Texture_buffer& img, Texture_buffer* dst)> Encode_img_fct;
@@ -540,9 +670,12 @@ struct Builder_context_impl : public Writer_context
 private:
 };
 
-Writer_context::Ptr create_i3s_writer_context(const Ctx_properties& _prop, Cartesian_transformation::Ptr cs_transform)
+
+Writer_context::Ptr create_i3s_writer_context(
+  const Ctx_properties& _prop, Writer_finalization_mode finalization_mode)
 {
-  auto builder_ctx = std::make_shared<Builder_context_impl>(_prop, cs_transform);
+  auto builder_ctx = std::make_shared<Builder_context_impl>(_prop);
+  builder_ctx->finalization_mode = finalization_mode;
   auto& prop = builder_ctx->decoder->m_prop;
 
 #ifndef NO_ETC2_SUPPORT
@@ -550,6 +683,15 @@ Writer_context::Ptr create_i3s_writer_context(const Ctx_properties& _prop, Carte
     builder_ctx->encode_to_etc2_with_mips = compress_to_ktx_with_mipmaps;
 #endif
   set_gpu_compression(prop.gpu_tex_encoding_support, GPU_texture_compression::ETC_2, (bool)builder_ctx->encode_to_etc2_with_mips);
+
+#ifndef NO_BASIS_ENCODER_SUPPORT
+  if (prop.gpu_tex_encoding_support & (GPU_texture_compression_flags)GPU_texture_compression::Basis)
+    builder_ctx->encode_to_basis_with_mips = compress_to_basis_with_mipmaps;
+  if (prop.gpu_tex_encoding_support & (GPU_texture_compression_flags)GPU_texture_compression::KTX2)
+      builder_ctx->encode_to_basis_ktx2_with_mips = compress_to_basis_ktx2_with_mipmaps;
+#endif
+  set_gpu_compression(prop.gpu_tex_encoding_support, GPU_texture_compression::Basis, (bool)builder_ctx->encode_to_basis_with_mips);
+  set_gpu_compression(prop.gpu_tex_encoding_support, GPU_texture_compression::KTX2, (bool)builder_ctx->encode_to_basis_ktx2_with_mips);
 
 #ifndef NO_DRACO_SUPPORT
   if (prop.geom_encoding_support & (Geometry_compression_flags)Geometry_compression::Draco)
@@ -559,6 +701,12 @@ Writer_context::Ptr create_i3s_writer_context(const Ctx_properties& _prop, Carte
 
   //always on (build)
   set_geom_compression(prop.geom_encoding_support, Geometry_compression::Lepcc, true);
+
+  // default SR helper doesn't project: 
+  builder_ctx->sr_helper_factory = [](const i3s::Spatial_reference_desc& layer_sr, const i3s::Spatial_reference_desc* dst_sr)
+  { return std::make_shared< Spatial_reference_xform_cartesian_only>(layer_sr); };
+  
+  builder_ctx->gzip_option = prop.gzip_option;
 
   return builder_ctx;
 }

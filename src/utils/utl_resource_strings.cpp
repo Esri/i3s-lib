@@ -19,6 +19,7 @@ email: contracts@esri.com
 
 #include "pch.h"
 #include "utils/utl_i3s_resource_defines.h"
+#include "utils/utl_string.h"
 #include <unordered_map>
 #include <string>
 
@@ -29,15 +30,20 @@ namespace utl
 
 namespace
 {
-const std::unordered_map<int, std::string> c_status_strings =
+#ifdef __cpp_char8_t
+  using u8_string = std::u8string;
+#else
+  using u8_string = std::string;
+#endif
+const std::unordered_map<int, u8_string> c_status_strings =
   {
-#include "utl_resource_strings.inc"
+#include "utils/utl_resource_strings.inc"
   };
 }
 
 std::string get_message_string(int string_id)
 {
-  return c_status_strings.at(string_id);
+  return utl::to_string(c_status_strings.at(string_id));
 }
 
 bool get_message_string(int string_id, std::string& string)
@@ -46,7 +52,7 @@ bool get_message_string(int string_id, std::string& string)
   if (it == c_status_strings.cend())
     return false;
 
-  string = it->second;
+  string.assign(utl::as_string_view(it->second));
   return true;
 }
 

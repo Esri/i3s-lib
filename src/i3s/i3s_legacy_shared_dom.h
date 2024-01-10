@@ -20,6 +20,7 @@ email: contracts@esri.com
 #pragma once
 #include "utils/utl_serialize.h"
 #include "utils/utl_geom.h"
+#include "i3s/i3s_layer_dom.h"
 
 
 namespace i3slib
@@ -61,7 +62,7 @@ struct Legacy_material_param_desc
     ar & utl::opt("reflectivity", reflectivity, 0.0f, c_yes);
     ar & utl::opt("shininess", shininess, 0.0f, c_yes);
     // some (invalid) data contains a 4th component. Not a critical failure though, so we suppress it (and print a warning later):
-    ar.push_suppressed_error_mask(utl::Json_exception::Error::Fixed_array_out_of_bound );
+    ar.push_suppressed_error_mask(utl::Json_parse_error::Error::Fixed_array_out_of_bound );
     ar & utl::opt("ambient", utl::seq(ambient), utl::Vec3f(0.0f), c_yes);
     ar & utl::opt("diffuse", utl::seq(diffuse), utl::Vec3f(0.0f), c_yes);
     ar & utl::opt("specular", utl::seq(specular), utl::Vec3f(0.0f), c_yes);
@@ -123,13 +124,13 @@ struct Legacy_texture_image_desc
     else
     {
       // some v1.4/1.5 SLPKs use a scalar instead of array. Test for array first
-      ar.push_suppressed_error_mask(utl::Json_exception::Error::Array_expected);
+      ar.push_suppressed_error_mask(utl::Json_parse_error::Error::Array_expected);
       ar & utl::nvp("href", utl::seq(href));
       ar & utl::opt("byteOffset", utl::seq(byte_offset));
       ar & utl::opt("length", utl::seq(length));
       if (ar.pop_suppressed_error_mask())
       {
-        std::vector<utl::Json_exception> errors;
+        std::vector<utl::Json_parse_error> errors;
         ar.pop_suppressed_log(&errors);
         //on reading v1.5 from Nearmap Reality Model: uses scalar instead of array...
         std::string ss;
@@ -152,7 +153,7 @@ struct Legacy_texture_desc
   std::vector< Mime_image_format> encoding;
   std::vector< Legacy_wrap_mode > wrap;
   Legacy_uv_set uv_set = Legacy_uv_set::Uv0;
-  Legacy_image_channel channels= Legacy_image_channel::Not_set;//supposed to be an array...
+  Legacy_image_channel channels = Legacy_image_channel::Rgb;//Legacy_image_channel::Not_set;//supposed to be an array...
   bool atlas = false;
   std::vector< Legacy_texture_image_desc > images;
   // ----
@@ -173,19 +174,19 @@ struct Legacy_texture_desc
     {
       // some v1.4/1.5 SLPKs use a scalar instead of array. Test for array first
       ar.push_suppressed_error_mask(
-        (utl::Json_exception::Error_flags_t)utl::Json_exception::Error::Array_expected
+        (utl::Json_parse_error::Error_flags_t)utl::Json_parse_error::Error::Array_expected
       );
       ar & utl::opt("encoding", utl::seq(encoding), std::vector< Mime_image_format >(), c_yes);
       if (ar.pop_suppressed_error_mask())
       {
-        std::vector<utl::Json_exception> errors;
+        std::vector<utl::Json_parse_error> errors;
         ar.pop_suppressed_log(&errors);
         Mime_image_format scalar;
         ar & utl::opt("encoding", scalar, Mime_image_format::Not_set);
         encoding.resize(1);
         encoding[0] = scalar;
       }
-      //if (what & (utl::Json_exception::Error_flags_t)utl::Json_exception::Error::Unknown_enum)
+      //if (what & (utl::Json_parse_error::Error_flags_t)utl::Json_parse_error::Error::Unknown_enum)
       //{
       //  encoding = i3s::Mime_image_format::Jpg;
       //}
@@ -193,7 +194,7 @@ struct Legacy_texture_desc
     ar & utl::opt("wrap", utl::seq(wrap), std::vector< Legacy_wrap_mode>(), c_yes);
     ar & utl::opt("atlas", atlas, false, c_yes);
     ar & utl::opt("uvSet", utl::enum_str( uv_set ), Legacy_uv_set::Uv0, c_yes);
-    ar & utl::opt("channels", utl::enum_str(channels), Legacy_image_channel::Not_set, c_yes);
+    ar & utl::opt("channels", utl::enum_str(channels), Legacy_image_channel::Rgb, c_yes);
     ar & utl::nvp("images", utl::seq( images)); // WSV doesn't seem to work if there are not there...
   }
 
@@ -215,6 +216,7 @@ struct Unnamed_placeholder
 
 struct Legacy_shared_desc
 {
+  DECL_PTR(Legacy_shared_desc);
   void set_material_id(int id ) { material.name_hint = "mat_" + std::to_string(id); texture.name_hint = std::to_string(id);  }
   // ---field: 
   Unnamed_placeholder<Legacy_material_desc> material; //! WARNING: WSV expects this to be a unique name. See set_material_id()

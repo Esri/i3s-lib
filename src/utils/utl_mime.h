@@ -41,11 +41,13 @@ enum class Mime_type : Mime_type_set
   Dds_proper=32,
   Dds_legacy = 64,
   Ktx = 128,
+  Basis = 256,
+  Ktx2 = 512,
 
-  _next_ = 256, //to make sure we update the static array related to this enum 
+  _next_ = 1024, //to make sure we update the static array related to this enum 
   Default = Json | Binary | Not_set,
   Dds_any = Dds_proper | Dds_legacy,
-  Any_texture= Jpeg | Png | Dds_any | Ktx |Binary
+  Any_texture= Jpeg | Png | Dds_any | Ktx | Ktx2 | Binary
 };
 
 enum class Mime_encoding : Mime_encoding_set

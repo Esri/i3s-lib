@@ -29,6 +29,19 @@ namespace i3slib
 
 namespace utl
 {
+
+class Output_stream
+{
+public:
+  DECL_PTR(Output_stream);
+  virtual ~Output_stream() = default;
+  virtual int64_t  tellp() = 0;
+  virtual void     close() noexcept = 0;
+  virtual bool     fail() const = 0;
+  virtual bool     good() const = 0;
+  virtual Output_stream& write(const char* raw_bytes, std::streamsize count) = 0;
+};
+
 /*!
 Write a ZIP64 UNCOMPRESSED archive
 WARNING: Will fail on MD5 collision on file path. (2 different paths hashing to the same 128bit MD5)
@@ -40,15 +53,19 @@ class Slpk_writer
 {
 public:
   typedef uint32_t Create_flags;
-  enum Create_flag : Create_flags {
-    Unfinalized_only = 1, // Open an **unfinalized** SLPK. Will fail if SLPK has been finalized already or doesn't exists.
-    Disable_auto_finalize = 2,    // SLPK won't be finalized unless finalize() is call explicitly. Allows SLPK can be re-opened with Append_to_existing to keep adding files later on. 
-    Overwrite_if_exists_and_auto_finalize = 0 // default.
+  enum  Create_flag : Create_flags {
+    Unfinalized_only = 1, // Open an **unfinalized** SLPK.
+                          // Will fail if SLPK has been finalized already or doesn't exist.
+    On_destruction_keep_unfinalized_to_reopen = 2, // In destructor temporary files will be preserved.
+                                                   // Allows SLPK being re-opened
+                                                   // with Unfinalized_only flag to keep adding files later on. 
+    Overwrite_if_exists_and_cancel_in_destructor = 0 // default.
   };
   DECL_PTR(Slpk_writer);
   virtual ~Slpk_writer() = default;
   // --- Slpk_writer: ---
-  virtual bool    create_archive(const std::filesystem::path& path, Create_flags flags = Overwrite_if_exists_and_auto_finalize) = 0;
+  virtual bool    create_archive(const std::filesystem::path& path, Create_flags flags = Create_flag::Overwrite_if_exists_and_cancel_in_destructor) = 0;
+  virtual bool    create_stream(Output_stream::ptr strm) { return false; }
 
   virtual bool append_file(
     const std::string& archive_Path,
@@ -56,12 +73,21 @@ public:
     utl::Mime_type type = utl::Mime_type::Not_set,
     utl::Mime_encoding pack = utl::Mime_encoding::Not_set) = 0;
   
+#if 0 // deprecated TBD
   virtual bool    get_file(const std::string& archive_Path, std::string* content) =0;
+#endif
   virtual bool    finalize()  = 0;
-
+  virtual bool    cancel() noexcept = 0; // removes all temporary files or returns false if failed or unsupported
+  
+  virtual bool    close_unfinalized() noexcept = 0; // closes preserving all appended data in temporary files.
+                                                    // Allows SLPK being re-opened
+                                                    // with Unfinalized_only flag to keep adding files later on. 
 };
 
-I3S_EXPORT Slpk_writer* create_slpk_writer();
+Slpk_writer* create_file_slpk_writer(const std::filesystem::path& path);
+
+I3S_EXPORT Slpk_writer*   create_slpk_writer(const std::string& dst_path = std::string());
+I3S_EXPORT Output_stream* create_output_stream_std(std::filesystem::path path, std::ios_base::openmode mode); //for unit-testing.
 
 } // namespace utl
 

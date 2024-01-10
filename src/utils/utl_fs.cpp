@@ -25,62 +25,64 @@ email: contracts@esri.com
 #include <ctime>
 #include <iostream>
 
+
 #ifdef _WIN32
 #include "utils/win/utl_windows.h"
 #else
 #include <stdlib.h>
 #endif
 
-namespace i3slib
+namespace i3slib::utl
 {
 
-namespace utl
-{
-
-bool create_directory_recursively(stdfs::path path)
+bool create_directory_recursively(stdfs::path path) noexcept
 {
   std::error_code ec;
-  return stdfs::create_directories(path.make_preferred(), ec);
+  stdfs::create_directories(path.make_preferred(), ec);
+  return !ec;
 }
 
-bool file_exists(const stdfs::path& path)
+bool file_exists(const stdfs::path& path)noexcept
 {
   std::error_code ec;
   const auto status = stdfs::status(path, ec);
   return !ec && stdfs::exists(status) && stdfs::is_regular_file(status);
 }
 
-bool folder_exists(const stdfs::path& path)
+bool folder_exists(const stdfs::path& path)noexcept
 {
   std::error_code ec;
   const auto status = stdfs::status(path, ec);
   return stdfs::exists(status) && stdfs::is_directory(status);
 }
-bool remove_file(const stdfs::path& path)
+bool remove_file(const stdfs::path& path)noexcept
 {
   std::error_code ec;
-  return stdfs::remove(path,ec) && !ec;
+  stdfs::remove(path, ec);
+  return !ec;
 }
 
-bool write_file(const stdfs::path& path, const char* data, size_t bytes)
+bool write_file(const stdfs::path& path, const char* data, size_t bytes) noexcept
 {
   std::ofstream t(path, std::ios::binary);
-  t.write(data, bytes);
-  return t.good() && !t.fail();
+  return t.is_open() && t.write(data, bytes);
 }
 
-std::string read_file(const stdfs::path& path)
+std::string read_file(const stdfs::path& path) noexcept
 {
-  std::ifstream t(path, std::ios::binary | std::ios::ate);
-  size_t size = (size_t)t.tellg();
-  t.seekg(0);
-  if (!size || t.fail() || !t.good())
-    return {};
-
-  std::string buffer;
-  buffer.resize(size);
-  t.read(buffer.data(), size);
-  return buffer;
+  if (std::ifstream t{ path, std::ios::binary | std::ios::ate }; t.is_open())
+  {
+    size_t size = (size_t)t.tellg();
+    t.seekg(0);
+    if (size && t.good())
+    {
+      std::string buffer;
+      buffer.resize(size);
+      if (t.read(buffer.data(), size))
+        return buffer;
+    }
+  }
+  return {};
 }
 
 namespace
@@ -92,14 +94,14 @@ template<> struct Generic_string_method_selector<char16_t> { static std::basic_s
 template<> struct Generic_string_method_selector<char32_t> { static std::basic_string<char32_t> invoke(const stdfs::path& path) { return path.generic_u32string(); } };
 };
 
-stdfs::path::string_type get_generic_path_name(const stdfs::path& path)
+stdfs::path::string_type get_generic_path_name(const stdfs::path& path) noexcept
 {
   return Generic_string_method_selector<stdfs::path::value_type>::invoke(path);
 }
 
 namespace
 {
-std::string get_file_name_safe_timestamp()
+std::string get_file_name_safe_timestamp() noexcept
 {
   std::array<char, 32> timestamp; // to fit "2018-12-31-12-59-59\0"
   const auto t = std::time(nullptr);
@@ -144,7 +146,8 @@ bool Scoped_folder::delete_folder(
               stdfs::remove(dir_entry.path(), ec1);
               if (ec1)
               {
-                error_message_destination << "Error: can't delete file '" << dir_entry.path().generic_u8string()
+                error_message_destination << "Error: can't delete file '" 
+                  << utl::to_string(dir_entry.path())
                   << "'. Reason: " << ec.message() << std::endl;
 
               }
@@ -154,14 +157,16 @@ bool Scoped_folder::delete_folder(
               stdfs::remove_all(dir_entry.path(), ec1);
               if (ec1)
               {
-                error_message_destination << "Error: can't delete sub-folder '" << dir_entry.path().generic_u8string()
+                error_message_destination << "Error: can't delete sub-folder '" 
+                  << utl::to_string(dir_entry.path())
                   << "'. Reason: " << ec.message() << std::endl;
               }
             }
           }
         }
 
-        error_message_destination << "Error: can't delete folder '" << path_.generic_u8string()
+        error_message_destination << "Error: can't delete folder '" 
+          << utl::to_string(path_)
           << "'. Reason: " << ec.message() << std::endl;
         path_.clear();
         return false;
@@ -177,35 +182,73 @@ bool Scoped_folder::delete_folder(
   }
   catch (const std::exception & e)
   {
-    error_message_destination << "Error: can't delete folder '" << path_.generic_u8string()
+    error_message_destination << "Error: can't delete folder '" 
+      << utl::to_string(path_)
       << "Reason: " << e.what() << std::endl;
     return false;
   }
 }
 
-void Scoped_folder::delete_folder()
+void Scoped_folder::delete_folder() noexcept
 {
   if (!path_.empty())
   {
-    stdfs::remove_all(path_);
+    std::error_code ec;
+    stdfs::remove_all(path_, ec);
     path_.clear();
+    I3S_ASSERT(!ec);
   }
 }
 
 Scoped_folder::~Scoped_folder() noexcept
 {
-  delete_folder(std::cerr, false);
+  [[maybe_unused]] auto res = delete_folder(std::cerr, false);
 }
 
-Scoped_folder create_temporary_folder(const stdfs::path& prefix)
+
+stdfs::path create_temporary_folder_path(stdfs::path prefix) noexcept
 {
-  auto temp_path = stdfs::temp_directory_path();
+  I3S_ASSERT(!prefix.has_root_path());
+  std::error_code ec;
+  auto temp_path = stdfs::temp_directory_path(ec);
+  I3S_ASSERT(!ec);
+  if (ec)
+    return {};
+  if (prefix.has_parent_path())
+  {
+    temp_path /= prefix.parent_path();
+    prefix = prefix.filename();
+  }
+  [[maybe_unused]]
+  bool base_folder_creation_result_to_ignore = stdfs::create_directory(temp_path, ec);
+  I3S_ASSERT(!ec);
+  if (ec) // only error code need to be checked. It's ok and even expected that the directory already 
+    return {};
   temp_path /= prefix;
-  temp_path += get_file_name_safe_timestamp();
-  stdfs::create_directories(temp_path);
-  return Scoped_folder(temp_path);
+  stdfs::path full_path = temp_path;
+  auto timestamp = get_file_name_safe_timestamp();
+  full_path += timestamp;
+  constexpr int num_attempts = 1024;
+  for (int i = 0; i < num_attempts; ++i)
+  {
+    if (stdfs::create_directory(full_path, ec))
+      return full_path;
+    I3S_ASSERT(!ec);
+    full_path = temp_path;
+    full_path += timestamp;
+    full_path += '_';
+    full_path += std::to_string(i);
+  }
+  return {};
 }
+
+Scoped_folder create_temporary_folder(stdfs::path prefix) noexcept
+{
+  auto path = create_temporary_folder_path(prefix);
+
+  return path.empty() ? Scoped_folder() : Scoped_folder(path);
+
+}
+
 
 } // namespace utl
-
-} // namespace i3slib

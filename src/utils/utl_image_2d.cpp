@@ -18,13 +18,16 @@ email: contracts@esri.com
 */
 
 #include "pch.h"
+
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <stdlib.h>
+
 #include "utils/utl_image_2d.h"
 #include "utils/utl_i3s_assert.h"
 #include "utils/utl_bitstream.h"
 #include "utils/utl_platform_def.h"
-#include <algorithm>
-#include <array>
-#include <cstring>
 
 namespace i3slib
 {
@@ -53,14 +56,18 @@ Image_2d::Image_2d(Image_2d&& src)
 
 void Image_2d::resize(int w, int h, bool dont_free_on_min)
 {
-  int bytes = w * h * sizeof(pixel_t);
+  const auto bytes = sizeof(pixel_t) * w * h;
   if (bytes > m_capacity_in_bytes || !dont_free_on_min)
   {
     I3S_ASSERT_EXT(m_data == nullptr || m_is_owned == true); // Not supported yet. (since wrapped buffer *must* have been allocated with _aligned_malloc() )
     //re-alloc:
     if (m_is_owned)
       _aligned_free( m_data );
-    m_data = (pixel_t*)_aligned_malloc( bytes, c_byte_alignment);
+
+    m_data = static_cast<pixel_t*>(_aligned_malloc(bytes, c_byte_alignment));
+    if (!m_data)
+      return;
+
     m_is_owned = true;
     m_capacity_in_bytes = bytes;
   }
@@ -102,6 +109,9 @@ void Image_2d::mipmap_blocked4x4(const Image_2d& src, Image_2d* dst)
   if (new_w >= 4 && new_h >= 4)
   {
     dst->resize(new_w, new_h);
+    if (!dst->m_data)
+      return;
+
     auto* dst_it = dst->m_data;
     auto two_src_w = 2 * src_w;
     auto* src_row = src.m_data;
@@ -126,15 +136,18 @@ void Image_2d::mipmap_blocked4x4(const Image_2d& src, Image_2d* dst)
     auto block_h = (new_h + 3) / 4;
     auto padded_w = block_w * 4;
     auto padded_h = block_h * 4;
-    auto new_size_in_bytes = padded_w * padded_h  * sizeof(pixel_t);
+    auto new_size_in_bytes = sizeof(pixel_t) * padded_w * padded_h;
     if (new_size_in_bytes > dst->m_capacity_in_bytes)
     {
       if (dst->m_is_owned)
         _aligned_free(dst->m_data);
 
-      dst->m_data = (pixel_t*)_aligned_malloc(new_size_in_bytes, c_byte_alignment);
+      dst->m_data = static_cast<pixel_t*>(_aligned_malloc(new_size_in_bytes, c_byte_alignment));
+      if (!dst->m_data)
+        return;
+
       dst->m_is_owned = true;
-      dst->m_capacity_in_bytes = (int)new_size_in_bytes;
+      dst->m_capacity_in_bytes = new_size_in_bytes;
     }
     auto pad_pixel_count = padded_w - new_w;
     auto pad_row_count = padded_h - new_h;
@@ -167,27 +180,34 @@ void Image_2d::mipmap_blocked4x4(const Image_2d& src, Image_2d* dst)
 Image_2d Image_2d::create_aligned(int w, int h, const void* src, int src_bytes)
 {
   Image_2d ret;
+
+  const size_t size_in_bytes = sizeof(pixel_t) * w * h;
+  ret.m_data = static_cast<pixel_t*>(_aligned_malloc(size_in_bytes, c_byte_alignment));
+  if (!ret.m_data)
+    return {};
+
   ret.m_w = w;
   ret.m_h = h;
-  ret.m_data = (pixel_t*)_aligned_malloc(w * h * sizeof(pixel_t), c_byte_alignment);
   ret.m_is_owned = true;
+  ret.m_capacity_in_bytes = size_in_bytes;
+
   if (src && src_bytes)
   {
-    if ( w * h * sizeof(pixel_t) > src_bytes)
+    if (size_in_bytes > src_bytes)
     {
       I3S_ASSERT(false);
       return Image_2d();
     }
-    std::memcpy(ret.m_data, src, w*h * sizeof(pixel_t));
+    std::memcpy(ret.m_data, src, size_in_bytes);
   }
-  ret.m_capacity_in_bytes = src_bytes;
+
   return ret;
 }
 
 
 Image_2d Image_2d::wrap_aligned(int w, int h, void* data, int src_bytes)
 {
-  I3S_ASSERT_EXT(src_bytes == w * h * sizeof(pixel_t));
+  I3S_ASSERT_EXT(src_bytes == sizeof(pixel_t) * w * h);
   Image_2d ret;
   ret.m_w = w;
   ret.m_h = h;

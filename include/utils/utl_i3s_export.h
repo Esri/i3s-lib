@@ -19,6 +19,10 @@ email: contracts@esri.com
 
 #pragma once
 
+#ifdef RTC
+#  define I3S_STATIC
+#endif
+
 #if defined(I3S_STATIC)
   #define I3S_EXPORT
 #elif defined(I3S_LIB)

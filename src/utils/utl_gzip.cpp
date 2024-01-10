@@ -33,19 +33,12 @@ email: contracts@esri.com
 
 namespace i3slib
 {
-
 namespace utl
 {
-template< class X, class Y > bool compress_gzip(const X* bytes, int n_bytes, Y *dest, int level = MY_DEFAULT_COMPRESSION);
-template< class X, class Y > bool uncompress_gzip(const X* bytes, int n_bytes, Y *dest);
-
-template< class T > bool compress_gzip(std::vector<T>& source, std::vector<T>* dest, int level = MY_DEFAULT_COMPRESSION);
-template< class T > bool uncompress_gzip(std::vector<T>& source, std::vector<T>* dest);
-
-template< class Source, class Sink > bool compress_gzip2(Source* source, Sink* dest, int level = MY_DEFAULT_COMPRESSION);
-template< class Source, class Sink > bool uncompress_gzip2(Source* source, Sink* dest);
-
-int zlib_uncompress(unsigned char* dst, unsigned int dst_size, const unsigned char* src, unsigned int src_size)
+// Direct method from zlib (which uses different stream headers). 
+// This is use by decode Jpeg "shadow" alpha channel for instance. 
+// **WARNING**: newer code should not use this method.
+int zlib_uncompress(unsigned char* dst, uint32_t dst_size, const unsigned char* src, uint32_t src_size)
 {
   unsigned long dst_len = dst_size;
   return uncompress(dst, &dst_len, src, src_size);
@@ -54,167 +47,253 @@ int zlib_uncompress(unsigned char* dst, unsigned int dst_size, const unsigned ch
 
 struct Source_mem
 {
-  Source_mem(const void* buff, int n_bytes) :
-    m_curr(reinterpret_cast< const unsigned char*>(buff)),
-    m_end(reinterpret_cast< const unsigned char*>(buff) + n_bytes)
+  Source_mem(const void* buff, int nbytes)
+    : m_size(nbytes)
+    , m_curr(reinterpret_cast<const unsigned char*>(buff))
+    , m_end(reinterpret_cast<const unsigned char*>(buff) + nbytes)
   {}
- 
-  bool      read_some(unsigned char** cur, unsigned int* n_bytes, bool* is_finish)
+
+  int     total_size() const { return m_size; }
+  bool    read_some(unsigned char** cur, uint32_t* nBytes, bool* isFinish)
   {
     if (m_curr >= m_end)
       return false;
-    *cur = const_cast< unsigned char* >(m_curr);
-    *n_bytes = (uint32_t)(m_end - m_curr);
-    *is_finish = true;
-    m_curr += *n_bytes;
+    *cur = const_cast<unsigned char*>(m_curr);
+    *nBytes = (uint32_t)(m_end - m_curr);
+    *isFinish = true;
+    m_curr += *nBytes;
     return  true;
   }
-  const unsigned char* m_curr, *m_end;
+  int m_size;
+  const unsigned char* m_curr, * m_end;
 };
 
-//! WARNING cont_t must be a container of contiguous elements ( i.e. vector<T> or basic_string<T> )
-template< class Cont_t >
-struct Sink_vector
+struct Fixed_size_sink_trait
 {
-  typedef typename Cont_t::value_type T;
-  Sink_vector(Cont_t* vec, unsigned int chunk_size = 16 * 1024) :m_vec(vec), m_chunk_size(chunk_size / sizeof(T)), m_curr(0)
+  explicit Fixed_size_sink_trait(int& size_in_out) : m_size_in_out(size_in_out) {}
+  bool  reserve_some(char* dst, unsigned char** cur, uint32_t* nbytes, int )
   {
-    I3S_ASSERT_EXT(m_chunk_size > 16);
+    if (reserve_count)
+      return false; // no more.
+    // all in:
+    *cur = reinterpret_cast<unsigned char*>(dst);
+    *nbytes = m_size_in_out;
+    ++reserve_count;
+    return true;
+  }
+  void  rewind(char* dst, uint32_t nbytes)
+  {
+    m_size_in_out -= std::min((int)nbytes, m_size_in_out);
+  }
+  int& m_size_in_out;
+  int  reserve_count{ 0 };
+};
+
+namespace gzip
+{
+
+namespace
+{
+
+struct Monotonic_allocator
+{
+  // no copy
+  Monotonic_allocator(Monotonic_allocator const&) = delete;
+  void operator=(Monotonic_allocator const&) = delete;
+
+  Monotonic_allocator() = default;
+
+  // Must be called once at most
+  void set_mem(std::vector<uint8_t>& mem)
+  {
+    I3S_ASSERT_EXT(!m_mem);  // because set_mem is called once at most
+
+    if (mem.capacity() == 0)
+    {
+      m_next = nullptr;
+      m_begin = nullptr;
+      m_end = nullptr;
+    }
+    else
+    {
+      m_next = mem.data();
+      m_begin = mem.data();
+      m_end = mem.data() + mem.capacity();
+    }
+    m_mem = &mem;
   }
 
-  bool      reserve_some(unsigned char** cur, unsigned int* n_bytes)
+  ~Monotonic_allocator()
   {
-    m_vec->resize(m_vec->size() + m_chunk_size);
-    I3S_ASSERT_EXT(m_curr < sizeof(T)*m_vec->size());
-    *cur = byte_at(m_curr);
-    *n_bytes = (uint32_t)(m_vec->size() * sizeof(T) - m_curr);
-    m_curr += *n_bytes;
-    return true; //until memory blows up ;)
+    // To benefit use cases where we repeatedly compress / uncompress the same amount of data,
+    // we adjust the size of m_mem based on the value of m_sz_failed_allocs.
+
+    try
+    {
+      if (size_failed_allocs())
+      {
+        I3S_ASSERT_EXT(m_mem);
+        const size_t ideal_capacity = count_used_bytes() + size_failed_allocs();
+        m_mem->reserve(ideal_capacity);
+      }
+    }
+    catch (const std::exception &)
+    {
+      // coverity: reserve could throw : https://en.cppreference.com/w/cpp/memory/new/bad_array_new_length
+      I3S_ASSERT_EXT(false);
+    }
   }
 
-  void      rewind(unsigned int n_bytes)
+  uint8_t* try_alloc(const size_t requested_bytes)
   {
-    m_curr -= n_bytes;
-    I3S_ASSERT_EXT(n_bytes % sizeof(T) == 0); //otherwise, something's fishy...
-    size_t n_elem = n_bytes / sizeof(T); //floor. 
-    m_vec->resize(m_vec->size() - n_elem);
+    if (m_mem)
+    {
+      if (m_next + requested_bytes <= m_end)
+      {
+        uint8_t* ret = m_next;
+        m_next += requested_bytes;
+        return ret;
+      }
+      m_sz_failed_allocs += requested_bytes;
+    }
+    return nullptr;
   }
-  
+
+  bool owns(void* ptr) const { 
+    return ptr >= m_begin && ptr < m_end;
+  }
+
 private:
-  unsigned char*         byte_at(size_t i) { return reinterpret_cast<unsigned char*>(&((*m_vec)[0])) + i; }
-  Cont_t* m_vec;
-  size_t m_chunk_size;
-  size_t m_curr; //in bytes
+  uint8_t* m_next = nullptr;
+  const uint8_t* m_begin = nullptr;
+  const uint8_t* m_end = nullptr;
+  std::vector<uint8_t>* m_mem = nullptr;
+
+  size_t m_sz_failed_allocs = 0;
+
+  size_t size_failed_allocs() const
+  {
+    return m_sz_failed_allocs;
+  }
+
+  size_t count_used_bytes() const
+  {
+    return m_next - m_begin;
+  }
+
+  size_t total_bytes() const
+  {
+    return m_end - m_begin;
+  }
 };
 
-template< class T >      bool compress_gzip(std::vector<T>& source, std::vector<T> *dest, int level)
-{
-  Source_mem src(source.data(), (int)(source.size() * sizeof(T)));
-  Sink_vector< std::vector<T> > dst(dest);
-  return compress_gzip2(&src, &dst);
-}
-template< class T >      bool uncompress_gzip(std::vector<T>& source, std::vector<T> *dest)
-{
-  Source_mem src(source.data(), (uint32_t)(source.size() * sizeof(T)));
-  Sink_vector< std::vector<T> > dst(dest);
-  return uncompress_gzip2(&src, &dst);
 }
 
-
-template< class T, class Y >      bool compress_gzip(const T* bytes, int n_bytes, Y *dest, int level)
+void setup_stream_allocator(z_stream & strm, Monotonic_allocator & alloc, std::vector<uint8_t> & scratch_mem)
 {
-  Source_mem src(bytes, n_bytes);
-  Sink_vector< Y > dst(dest);
-  return compress_gzip2(&src, &dst);
+  alloc.set_mem(scratch_mem);
+
+  strm.opaque = &alloc;
+  strm.zalloc = [](void* q, unsigned n, unsigned m) -> void*
+  {
+    Monotonic_allocator* alloc = static_cast<Monotonic_allocator*>(q);
+    const size_t count_needed_bytes = (size_t)n * m;
+    if (uint8_t* ptr = alloc->try_alloc(count_needed_bytes))
+    {
+      I3S_ASSERT(alloc->owns(ptr));
+      return ptr;
+    }
+    return new uint8_t[count_needed_bytes];
+  };
+  strm.zfree = [](void* q, void* ptr) {
+    const Monotonic_allocator* alloc = static_cast<const Monotonic_allocator*>(q);
+    if (!alloc->owns(ptr))
+      delete [] static_cast<uint8_t*>(ptr);
+  };
+}
 }
 
-template< class T, class Y >      bool uncompress_gzip(const T* bytes, int n_bytes, Y *dest)
+template< class Sink, class Sink_trait > bool encode_gzip_tpl(std::vector<uint8_t> * scratch_alloc, Source_mem&& src, Sink* dst, Sink_trait&& trait, int level)
 {
-  Source_mem src(bytes, n_bytes);
-  Sink_vector< Y >  dst(dest);
-  return uncompress_gzip2(&src, &dst);
-}
+  using gzip::Monotonic_allocator;
+  using gzip::setup_stream_allocator;
 
-
-template< class Source, class Sink > bool compress_gzip2(Source *source, Sink *dest, int level)
-{
-  int ret, flush;
+  int ret;
   z_stream strm;
   std::memset(&strm, 0x00, sizeof(z_stream)); //coverty init. 
-  //unsigned char in[CHUNK];
-  //unsigned char out[CHUNK];
 
-  /* allocate deflate state */
-  strm.zalloc = Z_NULL;
-  strm.zfree = Z_NULL;
-  strm.opaque = Z_NULL;
-  //ret = deflateInit(&strm, level);
-  const int mem_level = 8; //the default;
-  ret = deflateInit2(&strm, level, Z_DEFLATED, 16 + MAX_WBITS, mem_level, Z_DEFAULT_STRATEGY);
+  Monotonic_allocator alloc;
+  if (scratch_alloc)
+    setup_stream_allocator(strm, alloc, *scratch_alloc);
+
+  // allocate deflate state
+  const int memLevel = 8; //the default;
+  ret = deflateInit2(&strm, level, Z_DEFLATED, 16 + MAX_WBITS, memLevel, Z_DEFAULT_STRATEGY);
   if (ret != Z_OK)
     return false;
 
-  /* compress until end of file */
-  bool is_finish;
-  while (source->read_some(&strm.next_in, &strm.avail_in, &is_finish))
+  bool is_finish=false;
+  //set the entire input:
+  src.read_some(&strm.next_in, &strm.avail_in, &is_finish);
+  I3S_ASSERT(is_finish);
   {
-    //strm.avail_in = fread(in, 1, CHUNK, source);
-    //flush = feof(source) ? Z_FINISH : Z_NO_FLUSH;
-    flush = is_finish ? Z_FINISH : Z_NO_FLUSH;
-    //strm.next_in = in;
-
-    /* run deflate() on input until output buffer not full, finish
-    compression if all of source has been read in */
-    //do {
-    //  strm.avail_out = CHUNK;
-    //  strm.next_out = out;
-
-    //while (dest->Next( &strm.next_out, &strm.avail_out ))
     do
     {
-      dest->reserve_some(&strm.next_out, &strm.avail_out);
-      ret = deflate(&strm, flush);    /* no bad return value */
+      if (strm.avail_out == 0)
+      {
+        if (!trait.reserve_some(dst, &strm.next_out, &strm.avail_out, src.total_size()))
+        {
+          break; //alloc failure.
+        }
+      }
+      ret = deflate(&strm, Z_FINISH);    /* no bad return value */
       I3S_ASSERT_EXT(ret != Z_STREAM_ERROR);  /* state not clobbered */
-                                              //I3S_ASSERT_EXT((int)avail - (int)strm.avail_out >= 0);
-                                              //if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
-                                              //  (void)deflateEnd(&strm);
-                                              //  return Z_ERRNO;
-                                              //}
-    } while (strm.avail_out == 0);
-    //rewind so we don't loose the left over:
-    dest->rewind(strm.avail_out);
-
-    /* done when last data in file processed */
+    } while (ret == Z_OK || ret == Z_BUF_ERROR);
   };
-  I3S_ASSERT_EXT(ret == Z_STREAM_END || ret == Z_OK);        /* stream will be complete */
-
-                                                             /* clean up and return */
+  if (ret == Z_STREAM_END)
+    trait.rewind(dst, strm.avail_out);
+  // clean up and return
   (void)deflateEnd(&strm);
-  return true;
+  return ret == Z_STREAM_END;
 }
 
-bool compress_gzip(const std::string& source, std::string* out, int level)
+struct String_sink_trait
 {
-  Source_mem src(source.data(), (int)(source.size()));
-  Sink_vector< std::string > dst(out);
-  return compress_gzip2(&src, &dst);
+  static bool  reserve_some(std::string* str, unsigned char** cur, uint32_t* nbytes, int src_size_hint)
+  {
+    auto pos = str->size();
+
+    size_t chunk_size = std::max( src_size_hint -(int)pos, 4096 );
+    str->resize(str->size() + chunk_size);
+    *cur = reinterpret_cast<unsigned char*>(&str->at(pos)); 
+    *nbytes = (uint32_t)str->size() - (uint32_t)pos;
+    return true; //until memory blows up ;)
+  }
+  static void  rewind(std::string* str, uint32_t nbytes)
+  {
+    str->resize(str->size() >= nbytes ? str->size() - nbytes : 0);
+  }
+};
+bool compress_gzip(const std::string& in, std::string* out, int level)
+{
+  out->resize(0); 
+  return encode_gzip_tpl(nullptr, Source_mem(in.data(), (int)in.size()), out, String_sink_trait(), level);
+}
+bool compress_gzip(const char* src, int src_size, std::string* out, int level)
+{
+  out->resize(0);
+  return encode_gzip_tpl(nullptr, Source_mem(src, src_size), out, String_sink_trait(), level);
 }
 
-bool compress_gzip(const char* ptr, int src_size, std::string* out, int level)
+bool compress_gzip(const char* src, int src_size, char* dst, int& dst_size_in_out,  int level)
 {
-  Source_mem src(ptr, src_size);
-  Sink_vector< std::string > dst(out);
-  return compress_gzip2(&src, &dst);
+  return encode_gzip_tpl(nullptr, Source_mem(src, src_size), dst, Fixed_size_sink_trait(dst_size_in_out), level);
 }
 
-
-bool uncompress_gzip(const std::string& source, std::string* out)
+bool compress_gzip(const std::string& in, std::string* out, std::vector<uint8_t>& tmp_buffer, int level)
 {
-  Source_mem src(source.data(), (int)(source.size()));
-  Sink_vector< std::string > dst(out);
-  auto ret = uncompress_gzip2(&src, &dst);
-  //uint32_t s1 = *reinterpret_cast<const uint32_t*>( &source[ source.size() - sizeof(int)] );
-  return ret;
+  out->resize(0);
+  return encode_gzip_tpl(&tmp_buffer, Source_mem(in.data(), (int)in.size()), out, String_sink_trait(), level);
 }
 
 /* Decompress from file source to file dest until stream ends or EOF.
@@ -224,75 +303,84 @@ invalid or incomplete, Z_VERSION_ERROR if the version of zlib.h and
 the version of the library linked do not match, or Z_ERRNO if there
 is an error reading or writing the files. */
 
-template< class Source, class Sink > bool uncompress_gzip2(Source *source, Sink *dest)
+template< class Sink, class Sink_trait > bool decode_gzip_tpl(std::vector<uint8_t>* scratch_alloc, Source_mem& src, Sink* dst, Sink_trait& trait)
 {
+  using gzip::Monotonic_allocator;
+  using gzip::setup_stream_allocator;
+
   int ret;
   z_stream strm;
-  //unsigned char in[CHUNK];
-  //unsigned char out[CHUNK];
+  memset(&strm, 0, sizeof(z_stream));
 
-  /* allocate inflate state */
-  strm.zalloc = Z_NULL;
-  strm.zfree = Z_NULL;
-  strm.opaque = Z_NULL;
-  strm.avail_in = 0;
-  strm.next_in = Z_NULL;
+  Monotonic_allocator alloc;
+  if (scratch_alloc)
+    setup_stream_allocator(strm, alloc, *scratch_alloc);
+
   ret = inflateInit2(&strm, 16 + MAX_WBITS);
   if (ret != Z_OK)
     return false;
 
-  /* decompress until deflate stream ends or end of file */
-  //do {
-  //  strm.avail_in = fread(in, 1, CHUNK, source);
-  //  if (ferror(source)) {
-  //    (void)inflateEnd(&strm);
-  //    return Z_ERRNO;
-  //  }
-  //  if (strm.avail_in == 0)
-  //    break;
-  //  strm.next_in = in;
-  bool is_finish;
-  while (source->read_some(&strm.next_in, &strm.avail_in, &is_finish))
+  bool is_finish=false;
+
+  //set the entire input:
+  src.read_some(&strm.next_in, &strm.avail_in, &is_finish);
+  I3S_ASSERT(is_finish);
+  do
   {
-    /* run inflate() on input until output buffer not full */
-    //do {
-    //  strm.avail_out = CHUNK;
-    //  strm.next_out = out;
-    do
+    if (strm.avail_out == 0)
     {
-      dest->reserve_some(&strm.next_out, &strm.avail_out);
-      ret = inflate(&strm, Z_NO_FLUSH);
-      I3S_ASSERT_EXT(ret != Z_STREAM_ERROR);  /* state not clobbered */
-      switch (ret) {
-        case Z_NEED_DICT:
-          ret = Z_DATA_ERROR;     /* and fall through */
-        case Z_DATA_ERROR:
-        case Z_MEM_ERROR:
-          (void)inflateEnd(&strm);
-          return false/*ret*/;
-      }
-      //have = CHUNK - strm.avail_out;
-      //if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
-      //  (void)inflateEnd(&strm);
-      //  return Z_ERRNO;
-      //}
-    } while (strm.avail_out == 0);
-    //rewind so we don't loose the left over:
-    dest->rewind(strm.avail_out);
-    if ((ret == Z_STREAM_END) != is_finish)
-    {
-      return false; //stream truncated !?
+      if (!trait.reserve_some(dst, &strm.next_out, &strm.avail_out, src.total_size()))
+      {
+        break; //alloc failure
+      } 
     }
-  }
-  //  /* done when inflate() says it's done */
-  //} while (ret != Z_STREAM_END);
-  I3S_ASSERT_EXT(ret == Z_STREAM_END);
+    ret = inflate(&strm, Z_NO_FLUSH);
+    I3S_ASSERT_EXT(ret != Z_STREAM_ERROR);  /* state not clobbered */
+  } while (ret == Z_OK);
+  if (ret == Z_STREAM_END)
+    trait.rewind(dst, strm.avail_out);
 
   /* clean up and return */
   (void)inflateEnd(&strm);
   return ret == Z_STREAM_END;
 }
 
+bool uncompress_gzip_maybe_monotonic(const std::string& in, std::string* out, std::vector<uint8_t>* ptr_tmp_buffer)
+{
+  out->clear();
+  Source_mem srcmem(in.data(), (int)in.size());
+  String_sink_trait trait;
+  return decode_gzip_tpl(ptr_tmp_buffer, srcmem, out, trait);
 }
 
+bool uncompress_gzip(const std::string& in, std::string* out)
+{
+  return uncompress_gzip_maybe_monotonic(in, out, nullptr);
+}
+
+bool uncompress_gzip_monotonic(const std::string& in, std::string* out, std::vector<uint8_t>& tmp_buffer)
+{
+  return uncompress_gzip_maybe_monotonic(in, out, &tmp_buffer);
+}
+
+
+bool uncompress_gzip_maybe_monotonic(const char* src, int src_size, char* dst, int& dst_size_in_out, std::vector<uint8_t>* ptr_tmp_buffer)
+{
+  Source_mem srcmem(src, src_size);
+  Fixed_size_sink_trait trait(dst_size_in_out);
+  return decode_gzip_tpl(ptr_tmp_buffer, srcmem, dst, trait);
+}
+
+bool uncompress_gzip(const char* src, int src_size, char* dst, int& dst_size_in_out)
+{
+  return uncompress_gzip_maybe_monotonic(src, src_size, dst, dst_size_in_out, nullptr);
+}
+
+bool uncompress_gzip_monotonic(const char* src, int src_size, char* dst, int& dst_size_in_out, std::vector<uint8_t>& tmp_buffer)
+{
+  return uncompress_gzip_maybe_monotonic(src, src_size, dst, dst_size_in_out, &tmp_buffer);
+}
+
+
+}// utl
 } // namespace i3slib

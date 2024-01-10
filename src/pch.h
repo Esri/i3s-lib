@@ -33,7 +33,7 @@ email: contracts@esri.com
 #include <memory>
 #include <numeric>
 #include <functional>
-#include <iostream>
+
 #include <locale>
 #include <codecvt>
 #include <sstream>
@@ -47,8 +47,6 @@ email: contracts@esri.com
 // 3rd party libs
 // Not adding jpeglib.h here because utl_jpeg.cpp needs to define a symbol _before_
 // including jpeglib.h, and I don't like putting that definition here. 
-#include "utils/json/json.h"
-#include "draco/draco_features.h"
 #include "libpng/png.h"
 #include "zlib.h"
 

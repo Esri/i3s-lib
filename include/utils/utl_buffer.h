@@ -18,9 +18,9 @@ email: contracts@esri.com
 */
 
 #pragma once
-#include "utl_declptr.h"
-#include "utl_i3s_assert.h"
-#include "utl_i3s_export.h"
+#include "utils/utl_declptr.h"
+#include "utils/utl_i3s_assert.h"
+#include "utils/utl_i3s_export.h"
 #include <cstring>
 
 #pragma warning(push)
@@ -148,7 +148,7 @@ private:
 // ----------- inline implementation: ----------------
 template<class T>
 inline Buffer_view<T>::Buffer_view(std::shared_ptr< const Buffer >buff, T* ptr, int count)
-  : m_buff( std::move(buff))
+  : m_buff(std::move(buff))
   , m_data(ptr)
   , m_count(count)
   , m_original_capacity(count)
@@ -156,11 +156,12 @@ inline Buffer_view<T>::Buffer_view(std::shared_ptr< const Buffer >buff, T* ptr, 
 }
 
 template<class T>
-inline Buffer_view<T>::Buffer_view(T * ptr, int count, Buffer_memory_ownership memory)
-  : Buffer_view(std::make_shared<Buffer>(
-    reinterpret_cast<const char*>(ptr), 
-    static_cast<int>(count * sizeof(T)), memory),
-    ptr,count)
+inline Buffer_view<T>::Buffer_view(T* ptr, int count, Buffer_memory_ownership memory)
+  : m_buff(std::make_shared<Buffer>(
+      reinterpret_cast<const char*>(ptr), static_cast<int>(count * sizeof(T)), memory))
+  , m_data(reinterpret_cast<T*>(const_cast<char*>(m_buff->data())))
+  , m_count(count)
+  , m_original_capacity(count)
 {  
 }
 
@@ -251,6 +252,17 @@ template<class T > inline void Buffer_view<T>::deep_copy()
     *this = buff->template create_typed_view<T>(m_count);
   }
 }
+
+}
+
+/*
+Copies elements of the _same_ type from one buffer to another.
+This is a type-safe alternative to memcpy when we know that the elements should have the same type.
+*/
+template<typename T>
+void copy_elements(T* dest, const T* src, size_t n_elements)
+{
+  memcpy(dest, src, n_elements * sizeof(T));
 }
 
 } // namespace i3slib
