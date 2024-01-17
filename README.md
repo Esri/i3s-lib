@@ -1,4 +1,4 @@
-# i3slib - Indexed 3D SceneLayers library
+ # i3s-lib - Indexed 3D SceneLayers library
 
 A C++ library for producing [Scene Layer Package](https://github.com/Esri/i3s-spec) (SLPK) files.
 Currently it does not provide reading / validating capabilities, this is planned for the future.
@@ -9,7 +9,7 @@ For a test program please see [here](examples/raster2slpk).
 
 # Installing dependencies
 
-There is a number of third-party libraries needed for _i3slib_ to build and run:
+There is a number of third-party libraries needed for _i3s-lib_ to build and run:
 * [zlib](https://www.zlib.net)
 * [libjpeg](http://libjpeg.sourceforge.net) There's no public git repository for the project. Today it seems like instead of the original libjpeg everyone is using [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo) - SIMD-enabled fork of libjpeg, API & ABI compatible. This is the version our 3rdparty project (see below) installs.
 * [libpng](http://www.libpng.org/pub/png/libpng.html) The project home page has no references to a public git repo, but [this one](https://github.com/glennrp/libpng) seems to be the "official" one.
@@ -26,7 +26,7 @@ NB: the only library from the above list that has an external dependency is _lib
 
 ### On Windows with Visual Studio + CMake
 
-Start Visual Studio, choose _"Open folder"_ command, point to ````projects/3rdparty````. A CMake project will open. Select a configuration to build. Run "Project -> Generate Cache", then "Build -> Build All".
+Start Visual Studio, choose _"Open folder"_ command, point to ````projects/3rdparty````. A CMake project will open. Select a configuration to build. Run "Project -> Generate Cache for i3s_3rdparty", then "Build -> Build All".
 
 You can build everything with Clang instead of the MSVC compiler, select "x64-Clang-" configurations for that. NB: you'll need to have the __C++ Clang tools for Windows__ component installed.
 
@@ -46,18 +46,9 @@ NB: In a typical Linux distribution some of the libraries listed above (zlib, li
 
 # Building the i3s library
 
-### On Windows with Visual Studio
-
-Open the ````sdk/build/i3s.sln```` solution. It contains three projects:
-* ````i3s_static```` - builds i3s library as a static library
-* ````i3s```` - builds i3s library as a DLL
-* ````demo```` - a sample application demonstrating a basic workflow of SLPK generation using the library
-
-Select configuration and build the solution.
-
 ### On Windows with Visual Studio + CMake
 
-Start Visual Stusio, choose _"Open folder"_ command, point to the root of the _i3slib_ source tree. A CMake project will open. Select a configuration to build. Run "Project -> Generate Cache", then "Build -> Build All". The build will produce i3s DLL and the demo application executable.
+Start Visual Stusio, choose _"Open folder"_ command, point to the root of the _i3s-lib_ source tree. A CMake project will open. Select a configuration to build. Run "Project -> Generate Cache for i3s", then "Build -> Build All". The build will produce i3s DLL and the demo application executable.
 
 You can build everything with Clang instead of the MSVC compiler, select "x64-Clang-" configurations for that. NB: you'll need to have the __C++ Clang tools for Windows__ component installed.
 
@@ -86,6 +77,14 @@ or use -DCMAKE_CXX_COMPILER option at configuration step:
 $ cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++-8
 $ cmake --build .
 ```
+### On Windows with Visual Studio
+
+Open the ````i3s-lib/projects/3rdparty/i3s.sln```` solution. It contains three projects:
+* ````i3s_static```` - builds i3s library as a static library
+* ````i3s```` - builds i3s library as a DLL
+* ````demo```` - a sample application demonstrating a basic workflow of SLPK generation using the library
+
+Select configuration and build the solution.
 
 # Known issues / limitations
 * Have never built for / tested on 32-bit platforms yet. Please report if you have any issues. We are going to add 32-bit build configuration.
