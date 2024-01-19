@@ -1,6 +1,11 @@
 # raster2slpk example application
 
-The application accepts two images as input: an elevation bitmap and a color bitmap, and produces an SLPK representing the terrain surface defined by these two bitmaps. The current implementation is very simplistic and works with particular input data obtained [from here](https://www.cc.gatech.edu/projects/large_models/ps.html).
+The application accepts two images as input: an elevation bitmap and a color bitmap, and produces an SLPK representing the terrain surface defined by these two bitmaps. 
+The current implementation is very simplistic and works with particular input data obtained [from here](https://www.cc.gatech.edu/projects/large_models/ps.html).
+Since the data links in the refrenced sources are currenlty down, we have extraced one representative sample data that can be used in the sample application:
+* For psuedo-color imagery you can use this imagery hosted [here](https://3dcities.maps.arcgis.com/home/item.html?id=1c34d15ec13f448ebe691274e66e03b3) in arcgis online. 
+* For the single band grayscale elevation you can use this imagery hosted [here](https://3dcities.maps.arcgis.com/home/item.html?id=1c34d15ec13f448ebe691274e66e03b3) in arcgis online.
+Both images are stored in png and can be directly used. Note the elevation data is already saved as width/height + 1 (513x513) and the imagery is 512x512.
 
 The app works under the following assumptions about the input data:
 * color bitmap has equal width and height
