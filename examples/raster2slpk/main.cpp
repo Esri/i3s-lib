@@ -667,20 +667,20 @@ bool process(
 
 int main(int argc, char* argv[])
 {
-  /*if (argc != 7)
+  if (argc != 7)
   {
     std::cout << "Usage:" << std::endl
       << "raster2slpk <elevation_png> <color_png> <output_slpk_file> <x_step> <y_step> <z_unit>" << std::endl;
 
     return 1;
-  }*/
+  }
  
-  const stdfs::path elevation_file_path("C:\\esri\\sdk\\data\\ps-e.lg+1.png");// argv[1]);
-  const stdfs::path color_file_path("C:\\esri\\sdk\\data\\ps-t.lg.png");//argv[2]);
-  const stdfs::path slpk_file_path("C:\\esri\\sdk\\data\\slpk\\sample.slpk"); // argv[3]);
+  const stdfs::path elevation_file_path(argv[1]);
+  const stdfs::path color_file_path(argv[2]);
+  const stdfs::path slpk_file_path(argv[3]);
 
-  const Vec2d cell_size(10, 10);//(std::stod(argv[4]), std::stod(argv[5]));
-  const double elevation_unit = 0.1;//std::stod(argv[6]);
+  const Vec2d cell_size(std::stod(argv[4]), std::stod(argv[5]));
+  const double elevation_unit = std::stod(argv[6]);
 
   //
   int size;
