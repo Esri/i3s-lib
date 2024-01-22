@@ -674,7 +674,7 @@ int main(int argc, char* argv[])
 
     return 1;
   }
-
+ 
   const stdfs::path elevation_file_path(argv[1]);
   const stdfs::path color_file_path(argv[2]);
   const stdfs::path slpk_file_path(argv[3]);
