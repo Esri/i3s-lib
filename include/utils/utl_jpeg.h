@@ -34,7 +34,7 @@ I3S_EXPORT bool decompress_jpeg(const char* src, int bytes, Buffer_view<char>* o
 
 I3S_EXPORT bool compress_jpeg( int w, int h, const char* src, int bytes, Buffer_view<char>* out, int channel_count, int quality=75, int src_row_stride=0);
 
-I3S_EXPORT bool get_jpeg_size(const char* src, int bytes, int* w, int* h);
+I3S_EXPORT bool get_jpeg_size(const char* src, int bytes, int* w, int* h, int max_tex_dim = -1);
 
 }
 

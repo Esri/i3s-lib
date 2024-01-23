@@ -28,9 +28,9 @@ namespace i3slib
 namespace utl
 {
 // --------------------------------------------------------------------
-// class      Json_exception
+// class      Json_parse_error
 // --------------------------------------------------------------------
-Json_exception::Json_exception(Error what, const std::string& where, const std::string& add)
+Json_parse_error::Json_parse_error(Error what, const std::string& where, const std::string& add)
   : m_type(what)
   , m_where(where)
 {
@@ -133,15 +133,72 @@ void Archive_out_json::_save_binary_blob(const Binary_blob_const& blob)
   Variant vs(&str, Variant::Memory::Shared);
   _save_variant(vs);
 }
+
+namespace
+{
+
+constexpr int c_count = 6;
+const char c_special[c_count] = { '\b', '\t', '\n','\r', '"', '\\' }; //in c
+const char c_escaped[c_count] = { 'b', 't', 'n','r', '"', '\\' }; // in json
+
+size_t is_special(char c)
+{
+  for (size_t i = 0; i < c_count; i++)
+  {
+    if (c_special[i] == c)
+      return i;
+  }
+
+  return static_cast<size_t>(-1);
+}
+
+std::string escape_special_char_for_json(std::string&& src)
+{
+  const auto len = src.length();
+  size_t pos = 0;
+  size_t ind_spec;
+
+  // Find the first character that needs escaping in the string.
+  for (; pos < len; pos++)
+  {
+    ind_spec = is_special(src[pos]);
+    if (ind_spec != static_cast<size_t>(-1))
+      break;
+  }
+
+  if (pos == len)
+    return std::move(src);  // There's nothing to escape.
+
+  std::string out;
+  out.reserve(src.size() + 1);
+  out.assign(src, 0, pos);
+  out.push_back('\\');
+  out.push_back(c_escaped[ind_spec]);
+
+  for (pos++; pos < len; pos++)
+  {
+    const auto c = src[pos];
+    ind_spec = is_special(c);
+    if (ind_spec == static_cast<size_t>(-1))
+      out.push_back(c);
+    else
+    {
+      out.push_back('\\');
+      out.push_back(c_escaped[ind_spec]);
+    }
+  }
+
+  return out;
+}
+
+}
+
 void Archive_out_json::_save_variant(const Variant& v)
 {
   if (Variant_trait::is_string(v.get_type()))
-  {
-    //special chars are already escaped
-    (*m_out) << '\"' << v << '\"';
-  }
+    (*m_out) << '\"' << escape_special_char_for_json(v.to_string()) << '\"';
   else
-    (*m_out) << v;
+    (*m_out) << v.to_string();
 }
 void Archive_out_json::_save_unparsed_node(Unparsed_field& node)
 {

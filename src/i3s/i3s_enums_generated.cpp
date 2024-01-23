@@ -84,19 +84,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Alpha_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Alpha_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -134,19 +135,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Face_culling_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Face_culling_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -197,19 +199,70 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Type& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Type& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
-    return ar;
+    
+
+    struct Helper_Domain_type
+    {
+      typedef Domain_type Enum_t;
+      static constexpr int c_key_count = 2;
+      static constexpr int c_entry_count = 2;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Domain_type::CodedValue, "codedValue"},
+{Domain_type::Range, "range"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Domain_type::Item Helper_Domain_type::c_known[Helper_Domain_type::c_entry_count];
+
+    std::string     to_string(Domain_type enum_val)   {    return Helper_Domain_type::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Domain_type* out)  { return Helper_Domain_type::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Domain_type& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Domain_type& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -255,19 +308,69 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Esri_field_type& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Esri_field_type& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
-    return ar;
+    
+
+    struct Helper_Key_value_encoding_type
+    {
+      typedef Key_value_encoding_type Enum_t;
+      static constexpr int c_key_count = 1;
+      static constexpr int c_entry_count = 1;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Key_value_encoding_type::Separated_key_values, "SeparatedKeyValues"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Key_value_encoding_type::Item Helper_Key_value_encoding_type::c_known[Helper_Key_value_encoding_type::c_entry_count];
+
+    std::string     to_string(Key_value_encoding_type enum_val)   {    return Helper_Key_value_encoding_type::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Key_value_encoding_type* out)  { return Helper_Key_value_encoding_type::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Key_value_encoding_type& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Key_value_encoding_type& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -303,19 +406,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Legacy_topology& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Legacy_topology& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -355,19 +459,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Vertex_attrib_ordering& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Vertex_attrib_ordering& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -404,19 +509,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Feature_attrib_ordering& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Feature_attrib_ordering& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -454,19 +560,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Geometry_header_property& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Geometry_header_property& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -505,19 +612,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Mesh_topology& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Mesh_topology& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -554,19 +662,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Encoding& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Encoding& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -606,19 +715,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Lod_metric_type& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Lod_metric_type& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -660,19 +770,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Layer_type& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Layer_type& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -710,19 +821,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const VB_Binding& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, VB_Binding& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -763,19 +875,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Texture_filtering_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Texture_filtering_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -812,19 +925,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Texture_wrap_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Texture_wrap_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -862,19 +976,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Normal_reference_frame& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Normal_reference_frame& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -916,19 +1031,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Compressed_mesh_attribute& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Compressed_mesh_attribute& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -965,19 +1081,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Attrib_header_property& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Attrib_header_property& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1016,19 +1133,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Attrib_ordering& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Attrib_ordering& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1066,19 +1184,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Compressed_geometry_format& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Compressed_geometry_format& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1086,12 +1205,13 @@ email: contracts@esri.com
     {
       typedef Legacy_image_channel Enum_t;
       static constexpr int c_key_count = 2;
-      static constexpr int c_entry_count = 2;
+      static constexpr int c_entry_count = 3;
       typedef std::pair< Enum_t, const char* > Item;
       static constexpr Item c_known[c_entry_count] =
       {
           {Legacy_image_channel::Rgba, "rgba"},
-{Legacy_image_channel::Rgb, "rgb"}
+{Legacy_image_channel::Rgb, "rgb"},
+{Legacy_image_channel::Rgb, ""}
       };
       static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
 
@@ -1115,19 +1235,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Legacy_image_channel& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Legacy_image_channel& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1165,27 +1286,28 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Legacy_wrap_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Legacy_wrap_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
     struct Helper_Mime_image_format
     {
       typedef Mime_image_format Enum_t;
-      static constexpr int c_key_count = 4;
-      static constexpr int c_entry_count = 8;
+      static constexpr int c_key_count = 6;
+      static constexpr int c_entry_count = 10;
       typedef std::pair< Enum_t, const char* > Item;
       static constexpr Item c_known[c_entry_count] =
       {
@@ -1193,6 +1315,8 @@ email: contracts@esri.com
 {Mime_image_format::Png, "image/png"},
 {Mime_image_format::Dds, "image/vnd-ms.dds"},
 {Mime_image_format::Ktx, "image/ktx"},
+{Mime_image_format::Basis, "image/basis"},
+{Mime_image_format::Ktx2, "image/ktx2"},
 {Mime_image_format::Jpg, "data:image/jpeg"},
 {Mime_image_format::Png, "data:image/png"},
 {Mime_image_format::Dds, "data:image/vnd-ms.dds"},
@@ -1220,19 +1344,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Mime_image_format& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Mime_image_format& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1268,19 +1393,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Legacy_uv_set& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Legacy_uv_set& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1316,19 +1442,69 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Value_encoding& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Value_encoding& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
-    return ar;
+    
+
+    struct Helper_Time_encoding
+    {
+      typedef Time_encoding Enum_t;
+      static constexpr int c_key_count = 1;
+      static constexpr int c_entry_count = 1;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Time_encoding::Ecma_iso_8601, "ECMA_ISO8601"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Time_encoding::Item Helper_Time_encoding::c_known[Helper_Time_encoding::c_entry_count];
+
+    std::string     to_string(Time_encoding enum_val)   {    return Helper_Time_encoding::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Time_encoding* out)  { return Helper_Time_encoding::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Time_encoding& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Time_encoding& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1367,19 +1543,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Attribute_storage_info_encoding& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Attribute_storage_info_encoding& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1416,19 +1593,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Bsl_filter_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Bsl_filter_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1466,19 +1644,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Height_model& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Height_model& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1552,19 +1731,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Height_unit& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Height_unit& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1576,7 +1756,7 @@ email: contracts@esri.com
       typedef std::pair< Enum_t, const char* > Item;
       static constexpr Item c_known[c_entry_count] =
       {
-          {Continuity::Contiguous, "contiguous"},
+          {Continuity::Continuous, "continuous"},
 {Continuity::Discrete, "discrete"}
       };
       static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
@@ -1601,19 +1781,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Continuity& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Continuity& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1652,68 +1833,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Base_quantity& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Base_quantity& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
-    }
-    
-
-    struct Helper_Statistics_status
-    {
-      typedef Statistics_status Enum_t;
-      static constexpr int c_key_count = 2;
-      static constexpr int c_entry_count = 2;
-      typedef std::pair< Enum_t, const char* > Item;
-      static constexpr Item c_known[c_entry_count] =
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
       {
-          {Statistics_status::Final, "final"},
-{Statistics_status::Partial, "partial"}
-      };
-      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
-
-      static std::string     to_string(Enum_t what)
-      {
-        if (is_linear)
-          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
-        else
-          return _enum_val_to_string(what, c_known, c_key_count);
-      };
-      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
-      {
-        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
       }
-    };
-    
-    /*static*/ constexpr Helper_Statistics_status::Item Helper_Statistics_status::c_known[Helper_Statistics_status::c_entry_count];
-
-    std::string     to_string(Statistics_status enum_val)   {    return Helper_Statistics_status::to_string(enum_val); }
-    bool            from_string(const std::string& txt_utf8, Statistics_status* out)  { return Helper_Statistics_status::from_string(txt_utf8, out);} 
-
-    utl::Archive_out& operator&(utl::Archive_out& ar, const Statistics_status& me)
-    {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
-    }
-    utl::Archive_in& operator&(utl::Archive_in& ar, Statistics_status& me)
-    {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      return ar;
     }
     
 
@@ -1760,19 +1893,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Pcsl_attribute_buffer_type& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Pcsl_attribute_buffer_type& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1809,19 +1943,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Bounding_volume_type& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Bounding_volume_type& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1860,19 +1995,20 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Vxl_variable_semantic& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Vxl_variable_semantic& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
-    }
-    return ar;
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
 
@@ -1909,19 +2045,374 @@ email: contracts@esri.com
 
     utl::Archive_out& operator&(utl::Archive_out& ar, const Vertical_exag_mode& me)
     {
-    auto tmp = to_string(me);
-    ar & tmp;
-    return ar;
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
     }
     utl::Archive_in& operator&(utl::Archive_in& ar, Vertical_exag_mode& me)
     {
-    std::string tmp;
-    ar & tmp;
-    if (!from_string(tmp, &me))
-    {
-        ar.report_parsing_error(utl::Json_exception::Error::Unknown_enum, tmp );
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
-    return ar;
+    
+
+    struct Helper_Rendering_quality
+    {
+      typedef Rendering_quality Enum_t;
+      static constexpr int c_key_count = 4;
+      static constexpr int c_entry_count = 4;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Rendering_quality::Low, "low"},
+{Rendering_quality::Medium, "medium"},
+{Rendering_quality::High, "high"},
+{Rendering_quality::Custom, "custom"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Rendering_quality::Item Helper_Rendering_quality::c_known[Helper_Rendering_quality::c_entry_count];
+
+    std::string     to_string(Rendering_quality enum_val)   {    return Helper_Rendering_quality::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Rendering_quality* out)  { return Helper_Rendering_quality::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Rendering_quality& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Rendering_quality& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
+    }
+    
+
+    struct Helper_Interpolation
+    {
+      typedef Interpolation Enum_t;
+      static constexpr int c_key_count = 2;
+      static constexpr int c_entry_count = 2;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Interpolation::Linear, "linear"},
+{Interpolation::Nearest, "nearest"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Interpolation::Item Helper_Interpolation::c_known[Helper_Interpolation::c_entry_count];
+
+    std::string     to_string(Interpolation enum_val)   {    return Helper_Interpolation::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Interpolation* out)  { return Helper_Interpolation::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Interpolation& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Interpolation& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
+    }
+    
+
+    struct Helper_Vxl_render_mode
+    {
+      typedef Vxl_render_mode Enum_t;
+      static constexpr int c_key_count = 2;
+      static constexpr int c_entry_count = 2;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Vxl_render_mode::Volume, "volume"},
+{Vxl_render_mode::Surfaces, "surfaces"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Vxl_render_mode::Item Helper_Vxl_render_mode::c_known[Helper_Vxl_render_mode::c_entry_count];
+
+    std::string     to_string(Vxl_render_mode enum_val)   {    return Helper_Vxl_render_mode::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Vxl_render_mode* out)  { return Helper_Vxl_render_mode::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Vxl_render_mode& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Vxl_render_mode& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
+    }
+    
+
+    struct Helper_Vxl_rw_stats_status
+    {
+      typedef Vxl_rw_stats_status Enum_t;
+      static constexpr int c_key_count = 2;
+      static constexpr int c_entry_count = 2;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Vxl_rw_stats_status::Partial, "partial"},
+{Vxl_rw_stats_status::Final, "final"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Vxl_rw_stats_status::Item Helper_Vxl_rw_stats_status::c_known[Helper_Vxl_rw_stats_status::c_entry_count];
+
+    std::string     to_string(Vxl_rw_stats_status enum_val)   {    return Helper_Vxl_rw_stats_status::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Vxl_rw_stats_status* out)  { return Helper_Vxl_rw_stats_status::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Vxl_rw_stats_status& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Vxl_rw_stats_status& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
+    }
+    
+
+    struct Helper_Priority
+    {
+      typedef Priority Enum_t;
+      static constexpr int c_key_count = 2;
+      static constexpr int c_entry_count = 2;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Priority::High, "High"},
+{Priority::Low, "Low"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Priority::Item Helper_Priority::c_known[Helper_Priority::c_entry_count];
+
+    std::string     to_string(Priority enum_val)   {    return Helper_Priority::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Priority* out)  { return Helper_Priority::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Priority& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Priority& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
+    }
+    
+
+    struct Helper_Semantic
+    {
+      typedef Semantic Enum_t;
+      static constexpr int c_key_count = 2;
+      static constexpr int c_entry_count = 2;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Semantic::None, "None"},
+{Semantic::Labels, "Labels"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Semantic::Item Helper_Semantic::c_known[Helper_Semantic::c_entry_count];
+
+    std::string     to_string(Semantic enum_val)   {    return Helper_Semantic::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Semantic* out)  { return Helper_Semantic::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Semantic& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Semantic& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
+    }
+    
+
+    struct Helper_Capability
+    {
+      typedef Capability Enum_t;
+      static constexpr int c_key_count = 4;
+      static constexpr int c_entry_count = 4;
+      typedef std::pair< Enum_t, const char* > Item;
+      static constexpr Item c_known[c_entry_count] =
+      {
+          {Capability::View, "View"},
+{Capability::Query, "Query"},
+{Capability::Edit, "Edit"},
+{Capability::Extract, "Extract"}
+      };
+      static constexpr bool is_linear = (int)c_known[c_key_count - 1].first == c_key_count - 1;
+
+      static std::string     to_string(Enum_t what)
+      {
+        if (is_linear)
+          return (uint32_t)what < c_key_count ? c_known[(uint32_t)what].second : std::string();
+        else
+          return _enum_val_to_string(what, c_known, c_key_count);
+      };
+      static bool            from_string(const std::string& txt_utf8, Enum_t* out)
+      {
+        return _find_by_string(txt_utf8, c_known, c_entry_count, out);
+      }
+    };
+    
+    /*static*/ constexpr Helper_Capability::Item Helper_Capability::c_known[Helper_Capability::c_entry_count];
+
+    std::string     to_string(Capability enum_val)   {    return Helper_Capability::to_string(enum_val); }
+    bool            from_string(const std::string& txt_utf8, Capability* out)  { return Helper_Capability::from_string(txt_utf8, out);} 
+
+    utl::Archive_out& operator&(utl::Archive_out& ar, const Capability& me)
+    {
+      auto tmp = to_string(me);
+      ar & tmp;
+      return ar;
+    }
+    utl::Archive_in& operator&(utl::Archive_in& ar, Capability& me)
+    {
+      if (ar.has_parse_error()) return ar;
+      std::string tmp;
+      ar & tmp;
+      if (!from_string(tmp, &me))
+      {
+          ar.report_parsing_error(utl::Json_parse_error::Error::Unknown_enum, tmp );
+      }
+      return ar;
     }
     
     }}//endof ::i3s

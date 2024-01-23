@@ -93,21 +93,6 @@ template< class Y > inline void read_str( Y* in, std::string* val  )
     in->read( val->data(), val->size() );
 }
 
-
-//! stream-to-stream copy using a temp buffer
-inline bool  copy_stream(std::istream* src, std::ostream* dest, uint64_t n_bytes)
-{
-  std::vector< char > buff(1024 * 1024);
-  while (n_bytes > 0 && src->good() && dest->good())
-  {
-    auto n = std::min((uint64_t)buff.size(), n_bytes);
-    src->read(buff.data(), n);
-    dest->write(buff.data(), n);
-    n_bytes -= n;
-  }
-  return !src->fail() && dest->good() && !dest->fail();
-}
-
 } //endof ::utl
 
 } // namespace i3slib

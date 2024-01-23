@@ -69,11 +69,12 @@ private:
 
 
 //! Use non-dom version of the writer
-template< class T > inline std::string to_json(const T& val, int version=0)
+template< class T > inline std::string to_json(const T& val, int version=0, Archive_out_flags out_flags= Archive_out_flags::None)
 {
   static_assert(has_serialize<T>::value, "Type T is missing SERIALIZABLE Macro");
   std::ostringstream out;
   Archive_out_json ar(&out, version);
+  ar.set_flags(out_flags);
   ar & const_cast<T&>(val);
   return out.str();
 }
@@ -96,12 +97,20 @@ struct Wrap_array
 }
 template< class T > inline std::string to_json_array(const char* key, const std::vector<T>& vec, int version=0)
 {
-
   //static_assert(has_serialize<T>::value, "Type T is missing SERIALIZABLE Macro");
   std::ostringstream out;
   Archive_out_json ar(&out, version);
   detail::Wrap_array< T > wrap(key, vec);
   ar & wrap;
+  return out.str();
+}
+
+template< class T > inline std::string to_json_array(const std::vector<T>& vec, int version = 0)
+{
+  //static_assert(has_serialize<T>::value, "Type T is missing SERIALIZABLE Macro");
+  std::ostringstream out;
+  Archive_out_json ar(&out, version);
+  ar& seq(vec);
   return out.str();
 }
 

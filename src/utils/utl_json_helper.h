@@ -30,8 +30,14 @@ template< class T > inline bool from_json_safe(
   const std::string& str, T* obj, utl::Basic_tracker* trk, 
   const std::string& ref_document_for_error_reporting, int version = 0)
 {
-  auto in = Json_input::create(str, trk, ref_document_for_error_reporting, version);
-  return in && in->read(*obj, trk, ref_document_for_error_reporting);
+  Json_input in(str, version);
+  if (in.has_parse_error())
+  {
+    // parse errors at this point just mean the JSON doesn't even adhere to the JSON spec
+    utl::log_error(trk, IDS_I3S_JSON_PARSING_ERROR, ref_document_for_error_reporting, in.get_parse_error_string());
+    return false;
+  }
+  return in.read(*obj, trk, ref_document_for_error_reporting);
 }
 
 } // namespace i3s

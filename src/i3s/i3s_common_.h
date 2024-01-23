@@ -28,10 +28,12 @@ email: contracts@esri.com
 #include <vector>
 #include <functional>
 #include <memory>
+#include <array>
 
 namespace i3slib
 {
 
+namespace cmn { class Simple_projection; }
 namespace utl { class Basic_tracker; }
 
 namespace i3s
@@ -40,8 +42,10 @@ namespace i3s
 template< class T, class Y >
 struct Indexed_attrb
 {
-  typedef std::remove_const_t< T > Mutable_T;
-  typedef std::remove_const_t< Y > Mutable_Y;
+  using Mutable_T = std::remove_const_t<T>;
+  using Mutable_Y = std::remove_const_t<Y>;
+  using Value_view = utl::Buffer_view<T>;
+  using Index_view = utl::Buffer_view<Y>;
   Indexed_attrb() = default;
   Indexed_attrb(utl::Buffer_view<T>&& a, utl::Buffer_view< Y  >&& b) : values(std::move(a)), index(std::move(b)) {}
   Indexed_attrb<T, Y>& operator=(const Indexed_attrb<Mutable_T, Mutable_Y>& src)
@@ -64,8 +68,8 @@ struct Indexed_attrb
 
   void     deep_copy() { values.deep_copy(); index.deep_copy(); }
 
-  utl::Buffer_view< T >    values;
-  utl::Buffer_view< Y  >   index; //if any
+  Value_view values;
+  Index_view index; //if any
 };
 
 template<class T>
@@ -80,10 +84,11 @@ public:
   DECL_PTR(Mesh_abstract);
   virtual ~Mesh_abstract() = default;
 
-  virtual bool          update_positions( const utl::Vec3d& origin, const utl::Vec3f* rel_pos, int count )=0;
+  virtual bool          update_positions(const utl::Vec3d& origin, const utl::Vec3d* abs_pos, int count) = 0;
   virtual void          drop_normals() = 0;
   virtual void          drop_colors() = 0;
   virtual void          drop_regions() = 0;
+  virtual void          drop_feature_ids() = 0;
   virtual int           sanitize_uvs(float max_val = 16365.0f)=0;
   virtual utl::Vec3d    get_origin() const = 0;
   virtual Attrib_flags  get_available_attrib_mask() const = 0;
@@ -91,15 +96,19 @@ public:
   virtual int           get_face_count() const = 0;
   virtual int           get_region_count() const = 0;
   virtual int           get_feature_count() const = 0;
-  virtual Texture_meta::Wrap_mode          get_wrap_mode(int uv_set) const = 0;
-  virtual const Mesh_attrb<utl::Vec3f>&  get_relative_positions() const = 0;
-  virtual const Mesh_attrb<utl::Vec3f>&  get_normals() const = 0;
-  virtual bool                           create_normals(const i3s::Mesh_attrb< utl::Vec3f>& rel_positions) =0;
-  virtual const Mesh_attrb<utl::Vec2f>&  get_uvs(int uvset) const = 0;
-  virtual const Mesh_attrb<Rgba8>&  get_colors() const = 0;
-  virtual const Mesh_attrb<Uv_region>&  get_regions() const = 0;
-  virtual const Mesh_attrb<uint32_t>&        get_feature_ids() const = 0;
-  virtual const utl::Buffer_view<utl::Vec3d>&     get_absolute_positions() const =0;
+  virtual Texture_meta::Wrap_mode         get_wrap_mode(int uv_set) const = 0;
+  virtual const Mesh_attrb<utl::Vec3f>&   get_relative_positions() const = 0;
+  virtual const Mesh_attrb<utl::Vec3f>&   get_normals() const = 0;
+  virtual bool                            create_normals(const i3s::Mesh_attrb< utl::Vec3f>& rel_positions, bool left_handed_reference_frame) = 0;
+  virtual bool                            xform_normals(const std::function<bool(utl::Vec3f*, int count)>& proj) = 0;
+  virtual const Mesh_attrb<utl::Vec2f>&   get_uvs(int uvset) const = 0;
+  virtual const Mesh_attrb<Rgba8>&        get_colors() const = 0;
+  virtual const Mesh_attrb<Uv_region>&    get_regions() const = 0;
+  virtual const Mesh_attrb<uint64_t>&     get_feature_ids() const = 0;
+  virtual const Mesh_attrb<Anchor_point_fid_index>& get_anchor_point_fid_indices() const = 0;
+  virtual const Mesh_attrb<utl::Vec3f>&             get_relative_anchor_points() const = 0;
+  virtual const utl::Buffer_view<utl::Vec3d>&       get_absolute_anchor_points() const = 0;
+  virtual const utl::Buffer_view<utl::Vec3d>&       get_absolute_positions() const =0;
   virtual i3s::Mesh_topology    get_topology() const = 0;
   virtual void                  set_topology(i3s::Mesh_topology t) = 0;
 
@@ -108,18 +117,24 @@ public:
 struct Mesh_bulk_data
 {
   DECL_PTR(Mesh_bulk_data);
-  utl::Vec3d                       origin = utl::Vec3d(0.0);
-  Mesh_attrb<utl::Vec3f>      rel_pos;
-  Mesh_attrb<utl::Vec3f>      normals;
-  Mesh_attrb<utl::Vec2f>      uvs;
-  Mesh_attrb<Rgba8>      colors;
-  Mesh_attrb<Uv_region>  uv_region;
-  Mesh_attrb<uint32_t>            fids;
-  //utl::Buffer_view<const uint32_t>     fids;
+  utl::Vec3d              origin = utl::Vec3d(0.0);
+  Mesh_attrb<utl::Vec3f>  rel_pos;
+  Mesh_attrb<utl::Vec3f>  normals;
+  Mesh_attrb<utl::Vec2f>  uvs;
+  Mesh_attrb<Rgba8>       colors;
+  Mesh_attrb<Uv_region>   uv_region;
+  Mesh_attrb<uint64_t>    fids;
+  // there is one to one relation between anchor_point_fid_indices and rel_anchor_points
+  // indexing is never used:
+  // anchor_point_fid_indices.index.size() == 0
+  // rel_anchor_points.index.size() == 0  
+  // anchor_point_fid_indices.values.size() == rel_anchor_points.values.size()  
+  // anchor_point_fid_indices.values[i] is an index (into the above fids array) of feature having the anchor point
+  // anchor_point_fid_indices.values contains no duplicate feature indexes. 
+  // It means that each feature has zero or one anchor point
+  Mesh_attrb<Anchor_point_fid_index>  anchor_point_fid_indices;
+  Mesh_attrb<utl::Vec3f>              rel_anchor_points;
 };
-
-//I3S_EXPORT Mesh_abstract*   parse_mesh_from_bulk(Mesh_bulk_data& data);
-
 
 enum class Modification_status
 {
@@ -134,7 +149,13 @@ struct Modification_revision_stamp
 {
   using Stamp = std::array<std::uint64_t, 2>;
   Stamp stamp;
-  Modification_revision_stamp() = default;
+  Modification_revision_stamp(std::uint64_t x, std::uint64_t y) :
+    stamp{ x, y }
+  {}
+
+  Modification_revision_stamp() : stamp{0, 0}
+  {
+  }
   template <typename T>
   explicit Modification_revision_stamp(const T& data) 
     : stamp(reinterpret_cast<const Stamp&>(data))
@@ -173,22 +194,40 @@ public:
   virtual Modification_state          get_modification_state() const = 0;
 };
 
+// When key value encoding is used, this just contains the data filtered according to the preferred keys.
+class Attribute_buffer_filtered
+{
+public:
+  DECL_PTR(Attribute_buffer_filtered);
+  virtual ~Attribute_buffer_filtered() = default;
+
+  virtual Type                    get_type() const = 0;
+
+  /*
+  * If the buffer was key-value encoded, returns the value filtered according to the preferred keys.
+  * Else, returns the original value.
+  */
+  virtual utl::Variant            get_as_variant_filtered(int index) const = 0;
+};
+
+// Contains all the data (no filtering wrt preferred keys)
 class Attribute_buffer
 {
 public:
   DECL_PTR(Attribute_buffer);
   virtual ~Attribute_buffer() = default;
-  // --- Attribute_buffer:
+
   virtual const utl::Raw_buffer_view&  get_raw_data() const = 0;
-  //virtual const char*           get_raw_data() const = 0;
-  //virtual int                   get_size_in_bytes() const = 0;
   virtual Attrib_index            get_attribute_index() const = 0;
   virtual Type                    get_type() const = 0;
   virtual int                     get_count() const = 0;
   virtual std::string             get_as_string(int index) const = 0;
   virtual double                  get_as_double(int index) const = 0;
-  virtual utl::Variant            get_as_variant(int index) const = 0;
+  virtual bool                    get_is_null(int index) const  = 0;
+
+  virtual Attribute_buffer_filtered::Ptr create_filtered_attribute_buffer(const std::vector<std::string>& compressed_preferred_keys) const = 0;
 };
+
 
 //I3S_EXPORT    Attribute_buffer::Ptr create_from_buffer( const std::string& buffer, Type type);
 
@@ -206,9 +245,10 @@ public:
   // --- Stats_attribute:
   virtual void    get_basic(Basic_stats* out) const = 0;
   virtual int     get_histogram_size() const = 0;
-  virtual bool    get_histogram(double* lo, double* hi, int64_t* out, int max_out_count) const = 0;
+  virtual bool    get_histogram(double* lo, double* hi, uint64_t* out, int max_out_count) const = 0;
   virtual bool    get_most_frequent_numbers(int* size_in_out, int64_t* counts, double* values) const = 0;
   virtual bool    get_most_frequent_strings(int* size_in_out, int64_t* counts, std::string* values) const = 0;
+  virtual bool    get_time_extent(std::string* min_time_str, std::string* max_time_str) const = 0;
   virtual std::string to_json() const = 0;
   //virtual bool    get_stats(Stats_simple* out) const = 0;
 };

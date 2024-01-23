@@ -18,6 +18,7 @@ email: contracts@esri.com
 */
 
 #include "pch.h"
+#include <iostream>
 #include "i3s/i3s_legacy_mesh.h"
 #include "i3s/i3s_layer_dom.h"
 #include "utils/utl_i3s_resource_defines.h"
@@ -25,7 +26,7 @@ email: contracts@esri.com
 #include "utils/utl_bitstream.h"
 #include "utils/utl_json_helper.h"
 #include <optional>
-
+#include <algorithm>
 
 template<> struct std::hash<i3slib::utl::Vec4<uint16_t>>
 {
@@ -53,7 +54,7 @@ template< class T > Mesh_attrb< T > index_values(const utl::Buffer_view<const T>
     indices[i] = iter.first->second;
   }
   auto val = utl::Buffer::create_writable_typed_view<T>((int)values.size());
-  memcpy(val.data(), values.data(), values.size() * sizeof(T));
+  copy_elements(val.data(), values.data(), values.size());
   Mesh_attrb< T > ret;
   ret.values = val;
   ret.index = indices;
@@ -77,43 +78,12 @@ template< class T > Mesh_attrb< T > index_values(const Mesh_attrb<const T>& src)
     indices[i] = iter.first->second;
   }
   auto val = utl::Buffer::create_writable_typed_view<T>((int)unique_vals.size());
-  memcpy(val.data(), unique_vals.data(), unique_vals.size() * sizeof(T));
+  copy_elements(val.data(), unique_vals.data(), unique_vals.size());
   Mesh_attrb< T > ret;
   ret.values = val;
   ret.index = indices;
   return ret;
 }
-
-// -----------------------------------------------------------------------------
-//      Legacy point feature : XYZ + fid from featureData JSON resource
-// -----------------------------------------------------------------------------
-
-struct Point_feature_desc
-{
-  // --- fields:
-  utl::Vec3d position;
-  int64_t      fid;
-  SERIALIZABLE(Point_feature_desc);
-  template< class Ar > void serialize(Ar& ar)
-  {
-    ar & utl::nvp("position", utl::seq(position));
-    ar & utl::nvp("id", fid);
-  }
-};
-
-struct Point_feature_data_desc
-{
-  // --- fields:
-  std::vector< Point_feature_desc > points;
-
-  SERIALIZABLE(Point_feature_data_desc);
-  template< class Ar > void serialize(Ar& ar)
-  {
-    ar & utl::nvp("featureData", utl::seq(points));
-  }
-};
-
-
 
 // -----------------------------------------------------------------------------
 //        class         Mesh_buffer_impl
@@ -125,13 +95,14 @@ class Mesh_buffer_impl : public Mesh_abstract
 public:
   DECL_PTR(Mesh_buffer_impl);
   // --- Mesh_abstract :
-  virtual bool          update_positions(const utl::Vec3d& origin, const utl::Vec3f* rel_pos, int count) override;
+  virtual bool          update_positions(const utl::Vec3d& origin, const utl::Vec3d* abs_pos, int count) override;
   virtual void          drop_normals() override { m_normals = Mesh_attrb<utl::Vec3f>(); m_attrib_mask &= ~(Attrib_flags)Attrib_flag::Normal; }
   virtual void          drop_colors() override { m_colors = Mesh_attrb<Rgba8>(); m_attrib_mask &= ~(Attrib_flags)Attrib_flag::Color; }
   virtual void          drop_regions() override;
+  virtual void          drop_feature_ids() override{ m_fids = Mesh_attrb<uint64_t>(); m_attrib_mask &= ~(Attrib_flags)Attrib_flag::Feature_id; }
   virtual int           sanitize_uvs( float max_val) override;
   virtual utl::Vec3d    get_origin() const override { return m_origin; }
-  virtual uint32_t          get_available_attrib_mask() const override { return m_attrib_mask; }
+  virtual uint32_t      get_available_attrib_mask() const override { return m_attrib_mask; }
   virtual int           get_vertex_count() const override { return std::max(m_abs_pos.size(), m_rel_pos.size() ); }
   virtual int           get_face_count() const override { return get_vertex_count() / 3; }
   virtual int           get_region_count() const override { return (int)m_uv_region.values.size(); }
@@ -139,15 +110,18 @@ public:
   virtual Texture_meta::Wrap_mode            get_wrap_mode(int uv_set) const override;
   virtual const Mesh_attrb<utl::Vec3f>&      get_relative_positions() const override;
   virtual const Mesh_attrb<utl::Vec3f>&      get_normals() const override { return m_normals; }
-  virtual bool                               create_normals(const i3s::Mesh_attrb< utl::Vec3f>& rel_positions) override;
+  virtual bool                               create_normals(const i3s::Mesh_attrb< utl::Vec3f>& rel_positions, bool left_handed_reference_frame) override;
+  virtual bool                               xform_normals(const std::function<bool(utl::Vec3f*, int count)>& proj) override;
   virtual const Mesh_attrb<utl::Vec2f>&      get_uvs(int uvset) const override { return m_uvs; }
-  virtual const Mesh_attrb<Rgba8>&      get_colors() const override { return m_colors; };
-  virtual const Mesh_attrb<Uv_region>&  get_regions() const override { return m_uv_region; }
-  virtual const Mesh_attrb<uint32_t>&            get_feature_ids() const override { return m_fids; }
-
-  virtual const utl::Buffer_view<utl::Vec3d>&     get_absolute_positions() const override;
-  virtual i3s::Mesh_topology                      get_topology() const override { return m_topo; }
-  virtual void                                    set_topology(i3s::Mesh_topology t) override {  m_topo = t; }
+  virtual const Mesh_attrb<Rgba8>&           get_colors() const override { return m_colors; };
+  virtual const Mesh_attrb<Uv_region>&       get_regions() const override { return m_uv_region; }
+  virtual const Mesh_attrb<uint64_t>&        get_feature_ids() const override { return m_fids; }
+  virtual const Mesh_attrb<uint32_t>&         get_anchor_point_fid_indices() const override { return m_anchor_point_fid_indices; }
+  virtual const Mesh_attrb<utl::Vec3f>&       get_relative_anchor_points() const override { return m_rel_anchor_points; }
+  virtual const utl::Buffer_view<utl::Vec3d>& get_absolute_anchor_points() const override;
+  virtual const utl::Buffer_view<utl::Vec3d>& get_absolute_positions() const override;
+  virtual i3s::Mesh_topology                  get_topology() const override { return m_topo; }
+  virtual void                                set_topology(i3s::Mesh_topology t) override {  m_topo = t; }
   // --- Mesh_buffer_impl:
   bool                  assign(const utl::Vec3d & origin, utl::Raw_buffer_view& buffer, bool has_attrib, Attrib_flags vb_attrib, const std::string& buffer_path, const i3s::Geometry_schema_desc* desc, utl::Basic_tracker* trk);
   bool                  assign(const Mesh_bulk_data& src);
@@ -156,25 +130,25 @@ private:
   void                  _update_available();
   void                  _update_to_absolute_uv();
 private:
-  Attrib_flags                m_attrib_mask = 0;
-  utl::Vec3d                       m_origin = utl::Vec3d(0.0);
-  mutable Mesh_attrb<utl::Vec3f>      m_rel_pos;
-  Mesh_attrb<utl::Vec3f>      m_normals;
-  Mesh_attrb<utl::Vec2f>      m_uvs;
-  Mesh_attrb<Rgba8>      m_colors;
-  Mesh_attrb<Uv_region>  m_uv_region;
-  Mesh_attrb<uint32_t>            m_fids;
-  mutable Texture_meta::Wrap_mode    m_uv_wrap_mode = Texture_meta::Wrap_mode::Not_set; 
-  //for points:
-  enum class Native_position_encoding { Relative, Absolute };
-  Native_position_encoding         m_native_pos_mode= Native_position_encoding::Relative; //useful to support both PSL (abs) and Mesh (relative)
-  mutable utl::Buffer_view<utl::Vec3d>     m_abs_pos;
-  i3s::Mesh_topology               m_topo{ i3s::Mesh_topology::Triangles };
+  Attrib_flags                      m_attrib_mask = 0;
+  utl::Vec3d                        m_origin = utl::Vec3d(0.0);
+  mutable Mesh_attrb<utl::Vec3f>    m_rel_pos;
+  Mesh_attrb<utl::Vec3f>            m_normals;
+  Mesh_attrb<utl::Vec2f>            m_uvs;
+  Mesh_attrb<Rgba8>                 m_colors;
+  Mesh_attrb<Uv_region>             m_uv_region;
+  Mesh_attrb<uint64_t>              m_fids;
+  Mesh_attrb<uint32_t>              m_anchor_point_fid_indices;
+  Mesh_attrb<utl::Vec3f>                m_rel_anchor_points;
+  mutable utl::Buffer_view<utl::Vec3d>  m_abs_anchor_points;
+  mutable Texture_meta::Wrap_mode       m_uv_wrap_mode = Texture_meta::Wrap_mode::Not_set; 
+  mutable utl::Buffer_view<utl::Vec3d>  m_abs_pos;
+  i3s::Mesh_topology                    m_topo{ i3s::Mesh_topology::Triangles };
 };
 
 const Mesh_attrb<utl::Vec3f>& Mesh_buffer_impl::get_relative_positions() const 
 { 
-  if( m_native_pos_mode == Native_position_encoding::Absolute && m_abs_pos.size() && m_rel_pos.size()==0 )
+  if( m_abs_pos.size() && m_rel_pos.size() ==0 )
   {
     //build from absolute position
     auto rpos = utl::Buffer::create_writable_typed_view< utl::Vec3f>( m_abs_pos.size() );
@@ -185,20 +159,30 @@ const Mesh_attrb<utl::Vec3f>& Mesh_buffer_impl::get_relative_positions() const
   return m_rel_pos;
 }
 
-const utl::Buffer_view<utl::Vec3d>& Mesh_buffer_impl::get_absolute_positions() const
+static void ensure_absolute(const utl::Vec3d& origin, const Mesh_attrb<utl::Vec3f>& rel_pos, utl::Buffer_view<utl::Vec3d>& abs_pos)
 {
-  if (m_native_pos_mode == Native_position_encoding::Relative && m_rel_pos.size() && m_abs_pos.size() == 0)
+  if (abs_pos.size() == 0 && rel_pos.size())
   {
     //create from relative:
-    m_abs_pos = utl::Buffer::create_writable_typed_view< utl::Vec3d>(m_rel_pos.size());
-    for (int i = 0; i < m_rel_pos.size(); ++i)
-      m_abs_pos[i] = utl::Vec3d(m_rel_pos[i]) + m_origin;
+    abs_pos = utl::Buffer::create_writable_typed_view< utl::Vec3d>(rel_pos.size());
+    for (int i = 0; i < rel_pos.size(); ++i)
+      abs_pos[i] = utl::Vec3d(rel_pos[i]) + origin;
   }
+}
+
+const utl::Buffer_view<utl::Vec3d>& Mesh_buffer_impl::get_absolute_positions() const
+{
+  ensure_absolute(m_origin, m_rel_pos, m_abs_pos);
   return m_abs_pos;
 }
 
+const utl::Buffer_view<utl::Vec3d>& Mesh_buffer_impl::get_absolute_anchor_points() const
+{
+  ensure_absolute(m_origin, m_rel_anchor_points, m_abs_anchor_points);
+  return m_abs_anchor_points;
+}
 
-utl::Buffer_view<utl::Vec3f> create_flat_normals(const i3s::Mesh_attrb<  utl::Vec3f>& pt)
+utl::Buffer_view<utl::Vec3f> create_flat_normals(const i3s::Mesh_attrb<  utl::Vec3f>& pt, bool left_handed_reference_frame)
 {
   I3S_ASSERT(pt.size() % 3 == 0);
   auto normals = utl::Buffer::create_writable_typed_view< utl::Vec3f>(pt.size());
@@ -207,32 +191,50 @@ utl::Buffer_view<utl::Vec3f> create_flat_normals(const i3s::Mesh_attrb<  utl::Ve
     auto& p0 = pt[i];
     auto& p1 = pt[i + 1];
     auto& p2 = pt[i + 2];
-    (normals)[i] = utl::Vec3f::cross(p2 - p1, p1 - p0).normalized();
+    if (left_handed_reference_frame)
+    {
+      (normals)[i] = utl::Vec3f::cross(p2 - p1, p1 - p0).normalized();
+    }
+    else
+    {
+      (normals)[i] = utl::Vec3f::cross(p1 - p0, p2 - p1).normalized();
+    }
+
     (normals)[i + 1] = (normals)[i];
     (normals)[i + 2] = (normals)[i];
   }
   return normals;
 }
 
-bool Mesh_buffer_impl::create_normals(const i3s::Mesh_attrb< utl::Vec3f>& rel_positions)
+bool Mesh_buffer_impl::create_normals(const i3s::Mesh_attrb< utl::Vec3f>& rel_positions, bool left_handed_reference_frame)
 {
   if (rel_positions.size() != get_vertex_count())
     return false;
   //TBD: shouldn't we index the normal per face at least ? 
-  m_normals.values = create_flat_normals(rel_positions);
+  m_normals.values = create_flat_normals(rel_positions, left_handed_reference_frame);
   m_normals.index = decltype(m_normals.index){};
   return true;
 }
 
+bool Mesh_buffer_impl::xform_normals(const std::function<bool(utl::Vec3f*, int count)>& proj)
+{
+  // there is currently not an interface to get a mutable pointer to the data 
+  // so resort to const_cast for now to tranform normals without copying buffer
+  auto mut_normal_data = const_cast<utl::Vec3f*>(m_normals.values.data());
+  if (proj(mut_normal_data, m_normals.values.size()))
+  {
+    return true;
+  }
+  return false;
+}
 
 //! origin is provided just in case caller request "relative" positions instead of absolute. 
 bool Mesh_buffer_impl::assign_points(const utl::Buffer_view<utl::Vec3d>& abs_pos, const utl::Buffer_view<int64_t>& fid64, const utl::Vec3d & origin_just_in_case)
 {
-  m_native_pos_mode = Native_position_encoding::Absolute;
   m_abs_pos         = abs_pos;
-  auto fids = utl::Buffer::create_writable_typed_view<uint32_t>(fid64.size());
+  auto fids = utl::Buffer::create_writable_typed_view<uint64_t>(fid64.size());
   for (int i = 0; i < fids.size(); ++i)
-    fids[i] = (uint32_t)fid64[i];
+    fids[i] = (uint64_t)fid64[i];
 
   m_fids.values = fids;
 
@@ -279,15 +281,14 @@ int Mesh_buffer_impl::sanitize_uvs(float max_val)
 {
   int fixes= 0;
   float* val = const_cast< float*>( reinterpret_cast< const float*>(m_uvs.values.data()) );
-  int n = 2 * m_uvs.values.size();
-  while (n--)
+  float* end = val + 2 * m_uvs.values.size();
+  for(; val != end; ++val)
   {
-    if (std::abs(*val) > max_val)
+    if (std::abs(*val) > max_val || !std::isfinite(*val))
     {
       *val = 1.0f;
       ++fixes;
     }
-    ++val;
   }
   return fixes;
 }
@@ -329,7 +330,7 @@ Mesh_abstract*   parse_points_from_i3s(const utl::Vec3d& origin, const std::stri
   return nullptr;
 }
 
-void   encode_points_to_i3s(int count, const utl::Vec3d* xyz, const uint32_t* fids, std::string* feature_data_json, utl::Basic_tracker* )
+void   encode_points_to_i3s(int count, const utl::Vec3d* xyz, const uint64_t* fids, std::string* feature_data_json, utl::Basic_tracker* )
 {
   Point_feature_data_desc desc;
   desc.points.resize(count);
@@ -342,12 +343,17 @@ void   encode_points_to_i3s(int count, const utl::Vec3d* xyz, const uint32_t* fi
 }
 
 
-Mesh_abstract* parse_mesh_from_bulk(Mesh_bulk_data& data)
+Mesh_abstract* parse_mesh_from_bulk(const Mesh_bulk_data& data)
 {
   std::unique_ptr< Mesh_buffer_impl > ret(new Mesh_buffer_impl());
   if (ret->assign(data))
     return ret.release();
   return nullptr;
+}
+
+I3S_EXPORT Mesh_abstract::Ptr create_empty_mesh()
+{
+  return std::make_shared< Mesh_buffer_impl>();
 }
 
 template <class T > static bool is_all_zero(const utl::Buffer_view<const T>& src)
@@ -386,18 +392,26 @@ void _set_flag(Attrib_flags* flags, Attrib_flag what, int count)
     *flags |= (uint32_t)what;
 }
 
-bool Mesh_buffer_impl::update_positions(const utl::Vec3d& origin, const utl::Vec3f* rel_pos, int count)
+bool Mesh_buffer_impl::update_positions(const utl::Vec3d& origin, const utl::Vec3d* abs_pos, int count)
 {
-  if (count != m_rel_pos.values.size())
+  if (m_rel_pos.size())
   {
-    I3S_ASSERT(false);
-    return false;
+    if (count != m_rel_pos.values.size())
+    {
+      I3S_ASSERT(false);
+      return false;
+    }
+    // Casting away the cost should be fine because elements are not being added or removed. 
+    auto rel_pos = const_cast<utl::Vec3f*>(m_rel_pos.values.data());
+    // make the geometry relative to the new center:
+    for (int i = 0; i < count; ++i)
+      rel_pos[i] = utl::Vec3f(abs_pos[i] - origin);
   }
 
-  memcpy(const_cast<utl::Vec3f*>(m_rel_pos.values.data()), rel_pos, count * sizeof(utl::Vec3f));
+  m_origin = origin;
+
   return true;
 }
-
 
 bool Mesh_buffer_impl::assign(const Mesh_bulk_data& src)
 {
@@ -409,6 +423,8 @@ bool Mesh_buffer_impl::assign(const Mesh_bulk_data& src)
   //m_fid_indices = src.fid_indices;
   m_uv_region = src.uv_region;
   m_origin = src.origin;
+  m_anchor_point_fid_indices = src.anchor_point_fid_indices;
+  m_rel_anchor_points = src.rel_anchor_points;
   m_uv_wrap_mode = Texture_meta::Wrap_mode::Not_set;
 
   //Index the regions:
@@ -582,9 +598,9 @@ bool parse_legacy_geometry(
     if (oor_warn_count)
       return utl::log_warning(trk, IDS_I3S_INVALID_FEATURE_FACE_RANGE, buffer_path, oor_warn_count, fid_count);
 
-    auto fids = utl::Buffer::create_writable_typed_view<uint32_t>(fid64.size());
+    auto fids = utl::Buffer::create_writable_typed_view<uint64_t>(fid64.size());
     for (int i = 0; i < fids.size(); ++i)
-      fids[i] = (uint32_t)fid64[i];
+      fids[i] = (uint64_t)fid64[i];
 
     out.fids.values = fids;
     out.fids.index = fid_indices;
@@ -653,14 +669,14 @@ private:
   enum class Legacy_attr : int { pos = 0, normal, uv, color, region, fid, face_range, _count };
   template< class T, class Y = T > bool _encode(Legacy_attr what, const Mesh_attrb<T>& val);
 public:
-  Legacy_geometry_buffer_encoder(int vtx_count, int fid_count, uint32_t attrib_mask);
+  Legacy_geometry_buffer_encoder(int vtx_count, int fid_count, uint32_t attrib_mask, int face_range_count);
 
   bool encode_positions(const Mesh_attrb<  utl::Vec3f>& val) { return _encode(Legacy_attr::pos, val); }
   bool encode_normals(const Mesh_attrb<  utl::Vec3f>& val) { return _encode(Legacy_attr::normal, val); }
   bool encode_uvs(const Mesh_attrb<  utl::Vec2f>& val) { return _encode(Legacy_attr::uv, val); }
-  bool encode_colors(const Mesh_attrb<  utl::Vec4<uint8_t>>& val) { return _encode(Legacy_attr::color, val); }
+  bool encode_colors(const Mesh_attrb<  utl::Vec4<uint8_t>>& val);
   bool encode_regions(const Mesh_attrb< Uv_region>& val) { return _encode(Legacy_attr::region, val); }
-  bool encode_feature_indices(const Mesh_attrb< uint32_t>& val);
+  bool encode_feature_indices(const Mesh_attrb< uint64_t>& val);
 
   utl::Raw_buffer_view finalize() const { utl::Raw_buffer_view  tmp; tmp.operator=(m_buffer); return tmp; }
 
@@ -668,6 +684,7 @@ private:
   static const int c_bpv[(int)Legacy_attr::_count];
   std::array< int, (int)Legacy_attr::_count> m_offsets;
   int m_n, m_m;
+  int fr_count;
   //bool m_has_region;
   utl::Buffer_view<char> m_buffer;
 };
@@ -675,8 +692,8 @@ private:
 constexpr const int Legacy_geometry_buffer_encoder::c_bpv[(int)Legacy_attr::_count] = { 12, 12, 8, 4, 8, 8, 8 };
 
 
-Legacy_geometry_buffer_encoder::Legacy_geometry_buffer_encoder(int vtx_count, int fid_count, Attrib_flags attrib_mask)
-  : m_n(vtx_count), m_m(fid_count) //, m_has_region()
+Legacy_geometry_buffer_encoder::Legacy_geometry_buffer_encoder(int vtx_count, int fid_count, Attrib_flags attrib_mask, int face_range_count)
+  : m_n(vtx_count), m_m(fid_count), fr_count(face_range_count) //, m_has_region()
 {
   if (m_m < 1)
     m_m = 1; // PRO up to v2.3 expects at least one feature, otherwise won't draw.
@@ -684,23 +701,24 @@ Legacy_geometry_buffer_encoder::Legacy_geometry_buffer_encoder(int vtx_count, in
   // 3 + 3 + 2 + 1    pos, normal, uv0, color
   const int attr_size = (is_set(attrib_mask, Attrib_flag::Pos) ? 3 : 0) + (is_set(attrib_mask, Attrib_flag::Normal) ? 3 : 0) + (is_set(attrib_mask, Attrib_flag::Uv0) ? 2 : 0) +
     (is_set(attrib_mask, Attrib_flag::Color) ? 1 : 0) + (is_set(attrib_mask, Attrib_flag::Region) ? 2 : 0);
-  const int expected_size = hdr_size + m_n * sizeof(float) * attr_size + m_m * (sizeof(int64_t) + 2 * sizeof(int));
+  const int expected_size = hdr_size + m_n * sizeof(float) * attr_size + m_m * sizeof(int64_t) + fr_count * 2 * sizeof(int);
   m_buffer = utl::Buffer::create_writable_view(nullptr, expected_size);
   memset(m_buffer.data(), 0x00, expected_size); //some attribute may not get written, so we should zero the buffer first.
   int iter = hdr_size;
 
   for (int i = 0; i < (int)Legacy_attr::_count; ++i)
   {
+    m_offsets[i] = iter;
+
     if (i == (int)Legacy_attr::normal && !is_set(attrib_mask, Attrib_flag::Normal) ||
         i == (int)Legacy_attr::uv && !is_set(attrib_mask, Attrib_flag::Uv0) ||
         i == (int)Legacy_attr::color && !is_set(attrib_mask, Attrib_flag::Color) ||
         i == (int)Legacy_attr::region && !is_set(attrib_mask, Attrib_flag::Region))
     {
-      m_offsets[i] = m_offsets[i - 1];
       continue;
     }
-    m_offsets[i] = iter;
-    iter += c_bpv[i] * (i < (int)Legacy_attr::fid ? m_n : m_m);
+
+    iter += c_bpv[i] * (i < (int)Legacy_attr::fid ? m_n : (i < (int)Legacy_attr::face_range ? m_m : fr_count));
   }
   int* hdr = reinterpret_cast<int*>(m_buffer.data());
   hdr[0] = m_n;
@@ -742,7 +760,44 @@ template< class T, class Y > bool Legacy_geometry_buffer_encoder::_encode(Legacy
   return true;
 }
 
-bool Legacy_geometry_buffer_encoder::encode_feature_indices(const Mesh_attrb< uint32_t>& val)
+bool Legacy_geometry_buffer_encoder::encode_colors(const Mesh_attrb<utl::Vec4<uint8_t>>& val)
+{
+  constexpr auto attr = static_cast<int>(Legacy_attr::color);
+  if (m_offsets[attr + 1] != m_offsets[attr] + m_n * sizeof(Rgba8))
+  {
+    // encode_colors should only be called if Legacy_attr::color was set for the constructor
+    I3S_ASSERT(false);
+    return false;
+  }
+
+  auto dst = reinterpret_cast<Rgba8*>(m_buffer.data() + m_offsets[attr]);
+  const auto count = val.size();
+  if (count == 0)
+  {
+    // Fill with default color.
+    constexpr Rgba8 default_color(0xff, 0xff, 0xff, 0xff);
+    std::fill_n(dst, m_n, default_color);
+    return true;
+  }
+
+  if (count != m_n)
+  {
+    I3S_ASSERT(false);
+    return false;
+  }
+
+  if (val.index.size() == 0)
+    std::copy_n(val.values.data(), m_n, dst);
+  else
+  {
+    for (int i = 0; i < count; ++i)
+      dst[i] = val.values[val.index[i]];
+  }
+
+  return true;
+}
+
+bool Legacy_geometry_buffer_encoder::encode_feature_indices(const Mesh_attrb< uint64_t>& val)
 {
   int64_t* dst_fid = reinterpret_cast<int64_t*>(m_buffer.data() + m_offsets[(int)Legacy_attr::fid]);
   utl::Vec2i* dst_fr = reinterpret_cast<utl::Vec2i*>(m_buffer.data() + m_offsets[(int)Legacy_attr::face_range]);
@@ -793,7 +848,7 @@ bool Legacy_geometry_buffer_encoder::encode_feature_indices(const Mesh_attrb< ui
     i1 = i2;
     //++i2;
   } while (i2 < end);
-  if (fr.size() != m_m)
+  if (fr.size() != fr_count)
   {
     I3S_ASSERT_EXT(false); //not a valid face range
     return false;
@@ -804,7 +859,7 @@ bool Legacy_geometry_buffer_encoder::encode_feature_indices(const Mesh_attrb< ui
   {
     dst_fid[i] = static_cast<int64_t>(val.values[i]);
   }
-  memcpy(dst_fr, fr.data(), fr.size() * sizeof(utl::Vec2i));
+  copy_elements(dst_fr, fr.data(), fr.size());
   return true;
 }
 
@@ -834,7 +889,39 @@ utl::Raw_buffer_view encode_legacy_buffer(const Mesh_abstract&  mesh, uint32_t* 
   //      If all nodes were to not have a specific attribute, we wouldn't need to include it
   //      but since we write geometry buffers as we go, we can't predict this.
   attrib_mask |= (Attrib_flags)Attrib_flag::Legacy_no_region;
-  Legacy_geometry_buffer_encoder encoder(mesh.get_vertex_count(), mesh.get_feature_count(), attrib_mask);
+
+  // If there are no normals, then the normals were dropped, or they do not exist in the source data.
+  if (!mesh.get_normals().size())
+    attrib_mask &= ~(Attrib_flags)Attrib_flag::Normal;
+
+  // If there are no colors, then the colors were dropped, or they do not exist in the source data.
+  if(!mesh.get_colors().size())
+    attrib_mask &= ~(Attrib_flags)Attrib_flag::Color;
+
+  // if this mesh came from Draco, the number of face ranges may not equal the number of fids,
+  // due to Draco re-ordering of vertices
+  // e.g # fids = 2. indices: 0, 0, 0,..., 0, 1, 1, 1, ..., 1, 0, 0, 0 (3 face ranges)
+  int fr_size = 0;
+  if (mesh.get_feature_ids().size() > 1)
+  {
+    auto fid_indices = mesh.get_feature_ids().index;
+    uint32_t last_fid_idx = std::numeric_limits<uint32_t>::max();
+    for (auto idx : fid_indices)
+    {
+      if (last_fid_idx != idx)
+      {
+        ++fr_size;
+        last_fid_idx = idx;
+      }
+    }
+  }
+  else
+  {
+    // at least 1 fid is expected
+    fr_size = 1;
+  }
+
+  Legacy_geometry_buffer_encoder encoder(mesh.get_vertex_count(), mesh.get_feature_count(), attrib_mask, fr_size);
   bool successful_encoding = true;
 
   utl::for_each_bit_set_conditional(attrib_mask, [&](int bit_number)

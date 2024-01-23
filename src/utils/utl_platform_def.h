@@ -22,6 +22,16 @@ email: contracts@esri.com
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef _WIN32
+#define PLATFORM_EXPORT __declspec(dllexport)
+#define PLATFORM_IMPORT __declspec(dllimport)
+#define SELECTANY __declspec(selectany)
+#else
+#define PLATFORM_EXPORT __attribute__ ((visibility("default")))
+#define PLATFORM_IMPORT __attribute__ ((visibility("default")))
+#define SELECTANY __attribute__((weak))
+#endif
+
 #ifndef _MSC_VER
 
 #define __forceinline __attribute__((always_inline)) inline

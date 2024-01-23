@@ -61,7 +61,7 @@ public:
   static void hash(const uint8_t* data, size_t length, Digest& digest);
 
   static std::string to_string(const Digest& digest);
-
+  static bool        from_string(const std::string& in, Md5::Digest& out);
 private:
 
   void init_();

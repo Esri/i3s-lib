@@ -19,20 +19,15 @@ email: contracts@esri.com
 
 #pragma once
 #include <ios>
+#include <stdio.h>
 #include <string>
-#include <ios>
-#include <stdint.h>
+#include <filesystem>
+#include <vector>
+#include <cstdint>
 #include "utils/utl_md5.h"
 
-namespace i3slib
+namespace i3slib::utl::detail
 {
-
-namespace utl
-{
-
-namespace detail
-{
-
 I3S_EXPORT Md5::Digest hash_path(std::string* path);
 
 bool _parse_extra_record(const char* extra_rec, int extra_rec_size, uint32_t file_size32, uint64_t* out_file_size64, uint32_t offset32, uint64_t* out_offset64);
@@ -40,7 +35,12 @@ bool _parse_extra_record(const char* extra_rec, int extra_rec_size, uint32_t fil
 bool parse_extra_record_local_hdr(const char* extra_rec, int extra_rec_size, uint32_t file_size32, uint64_t* out_file_size64);
 bool parse_extra_record_cd_hdr(const char* extra_rec, int extra_rec_size, uint32_t file_size32, uint64_t* out_file_size64, uint32_t offset32, uint64_t* out_offset64);
 
-static const uint32_t c_ones_32 = 0xFFFFFFFF;
+static constexpr uint32_t c_ones_32 = 0xFFFFFFFF;
+
+inline constexpr uint32_t clamp_to_uint32(uint64_t v)
+{
+  return v < std::numeric_limits<uint32_t>::max() ? static_cast<uint32_t>(v) : std::numeric_limits<uint32_t>::max();
+}
 
 static const char* c_hash_table_file_name = "@specialIndexFileHASH128@";
 
@@ -83,28 +83,71 @@ public:
   virtual int64_t     gcount()const = 0;
 };
 
+#if defined(_MSC_VER)
+class Stdio_read_stream final : public detail::Stream_like
+{
+public:
+  explicit Stdio_read_stream() : m_in(nullptr) {}
+  bool open(const std::filesystem::path& file_name, std::ios_base::openmode mode = 
+    std::ios_base::in | std::ios_base::binary)
+  {
+    m_is_failed = true;
+    _wfopen_s(&m_in, file_name.c_str(), L"rb");
+    if (m_in)
+    {
+      if (_fseeki64_nolock(m_in, 0, SEEK_END) == 0)
+        m_is_failed = false;
+    }
+    m_last_read_count = 0;
+    return !m_is_failed;
+  }
+  ~Stdio_read_stream()
+  {
+    if (m_in)
+    {
+      _fclose_nolock(m_in);
+    }
+  }
+  virtual void        seekg(int64_t where, std::ios_base::seekdir dir = std::ios_base::beg) override
+  {
+    static_assert(std::ios_base::beg == SEEK_SET);
+    static_assert(std::ios_base::cur == SEEK_CUR);
+    static_assert(std::ios_base::end == SEEK_END);
+    if (_fseeki64_nolock(m_in, where, (int)dir))
+      m_is_failed = true;
+  }
+  virtual int64_t       tellg() const      override
+  {
+    return _ftelli64_nolock(m_in);
+  }
+  virtual bool        fail() const       override { return m_is_failed; }
+  virtual bool        good() const       override { return !m_is_failed; }
+  virtual void        read(void* dst, size_t nbytes) override
+  {
+    m_last_read_count = _fread_nolock(dst, 1, nbytes, m_in);
+  }
+  virtual int64_t     gcount()const override { return m_last_read_count; }
+
+private:
+  FILE* m_in;
+  bool                m_is_failed{ false };
+  int64_t             m_last_read_count{ 0 };
+};
+using Stream_no_lock = Stdio_read_stream;
+#else
+using Stream_no_lock = std::ifstream;
+#endif // _MSC_VER
+
 #pragma pack( push )
 #pragma pack( 2 )
 struct I3S_EXPORT Local_file_hdr
 {
-  Local_file_hdr(uint32_t size = 0, uint32_t crc = 0, uint16_t fn_length_ = 0) :
-    sig(0x04034b50),
-    ver_to_extract(45),
-    general_bits(0),
-    compression_type(0),
-    last_mod_file_time(0),
-    last_mod_file_date(0),
-    crc32(crc),
-    packed_size(size),
-    unpacked_size(size),
-    fn_length(fn_length_),
-    extra_length(0)
-    //TODO: date/time 
-  {}
+  static constexpr uint32_t c_magic = 0x04034b50;
+  Local_file_hdr(uint64_t size = 0, uint32_t crc = 0, uint16_t fn_length_ = 0);
   
-  bool read(std::istream* in, uint64_t offset, const std::string& actual_path, uint64_t* actual_packed_size);
-  bool read(Stream_like* in, uint64_t offset, const std::string& actual_path, uint64_t* actual_packed_size);
-  bool write(std::ostream* out, uint64_t offset, const std::string& path, const char* content, int content_size);
+  bool read(std::istream* in, uint64_t offset, uint64_t* actual_packed_size, std::string* actual_path );
+  bool read(Stream_like* in, uint64_t offset, uint64_t* actual_packed_size, std::string* actual_path);
+  bool write(std::ostream* out, uint64_t offset, const std::string& path, const char* content, uint64_t content_size);
 
   uint32_t sig;
   uint16_t ver_to_extract;
@@ -150,13 +193,62 @@ Disk Start#       4 bytes    Number of the disk on which this file starts
 This entry in the Local header must include BOTH original
 and compressed file size fields.
 */
-struct Extra_field_64
+constexpr unsigned c_block_hdr_size = 4; // 2 - bytes for block type and 2 - for block size
+constexpr unsigned c_zip_64_block_type = 1;
+
+struct Extra_field_64_offset_only
 {
-  explicit Extra_field_64(uint64_t n_bytes) : id(1), n_bytes_to_follow(8), size(n_bytes) {}
+  static constexpr unsigned c_bytes_to_follow = sizeof(uint64_t);
+  explicit Extra_field_64_offset_only(uint64_t lh_offset) 
+    : id(c_zip_64_block_type), n_bytes_to_follow(c_bytes_to_follow)
+    , local_hdr_offset(lh_offset) {}
   uint16_t id;
   uint16_t n_bytes_to_follow;
-  uint64_t size;
+  uint64_t local_hdr_offset;
 };
+static_assert(sizeof(Extra_field_64_offset_only) == c_block_hdr_size + Extra_field_64_offset_only::c_bytes_to_follow);
+
+struct Extra_field_64bit_file_size
+{
+  static constexpr unsigned c_bytes_to_follow = 2 * sizeof(uint64_t);
+  explicit Extra_field_64bit_file_size(uint64_t size)
+    : id(c_zip_64_block_type), n_bytes_to_follow(c_bytes_to_follow)
+    , original_size(size), compressed_size(size) {}
+  uint16_t id;
+  uint16_t n_bytes_to_follow;
+  uint64_t original_size;
+  uint64_t compressed_size;
+};
+static_assert(sizeof(Extra_field_64bit_file_size) == c_block_hdr_size + Extra_field_64bit_file_size::c_bytes_to_follow);
+
+struct Extra_field_64_big_file_with_offset
+{
+  static constexpr unsigned c_bytes_to_follow = 3 * sizeof(uint64_t);
+  explicit Extra_field_64_big_file_with_offset(uint64_t size, uint64_t offset)
+    : id(c_zip_64_block_type), n_bytes_to_follow(c_bytes_to_follow)
+    , original_size(size), compressed_size(size), local_hdr_offset(offset) {}
+  uint16_t id;
+  uint16_t n_bytes_to_follow;
+  uint64_t original_size;
+  uint64_t compressed_size;
+  uint64_t local_hdr_offset;
+};
+static_assert(sizeof(Extra_field_64_big_file_with_offset) == c_block_hdr_size + Extra_field_64_big_file_with_offset::c_bytes_to_follow);
+
+inline Local_file_hdr::Local_file_hdr(uint64_t size, uint32_t crc, uint16_t fn_length_) :
+  sig(c_magic),
+  ver_to_extract(45),
+  general_bits(0),
+  compression_type(0),
+  last_mod_file_time(0),
+  last_mod_file_date(0),
+  crc32(crc),
+  packed_size(clamp_to_uint32(size)),
+  unpacked_size(clamp_to_uint32(size)),
+  fn_length(fn_length_),
+  extra_length(size >= std::numeric_limits<uint32_t>::max() ? sizeof(Extra_field_64bit_file_size) : 0)
+  //TODO: date/time
+{}
 
 /*
 central file header signature      4 bytes  (0x02014b50)
@@ -183,11 +275,13 @@ file comment (variable size)
 */
 struct Cd_hdr_raw
 {
-  static const uint32_t  k_magic = 0x02014b50;
+  static constexpr uint32_t  c_magic = 0x02014b50;
   Cd_hdr_raw() {}
-  explicit Cd_hdr_raw(const Local_file_hdr& h, uint64_t offset) : sig(k_magic), writer_ver(45), ver_to_extract(h.ver_to_extract), general_bits(h.general_bits), compression_type(h.compression_type)
+  explicit Cd_hdr_raw(const Local_file_hdr& h,uint64_t size, uint64_t offset) 
+    : sig(c_magic), writer_ver(45), ver_to_extract(h.ver_to_extract), general_bits(h.general_bits), compression_type(h.compression_type)
     , last_mod_file_time(h.last_mod_file_time), last_mod_file_date(h.last_mod_file_date), crc32(h.crc32), packed_size(h.packed_size), unpacked_size(h.unpacked_size), fn_length(h.fn_length)
-    , extra_length((uint16_t)sizeof(Extra_field_64))
+    , extra_length((uint16_t)(size >= std::numeric_limits<uint32_t>::max()
+      ? sizeof(Extra_field_64_big_file_with_offset) : sizeof(Extra_field_64_offset_only)))
     , comment_length(0)
     , disk0(0)
     , int_attrib(0)
@@ -195,7 +289,7 @@ struct Cd_hdr_raw
     , rel_offset(detail::c_ones_32) //ALWAYS write offset in extra-field to simplify CDHdr update (re-writting file content)
   {
   }
-  bool is_valid() const { return sig == k_magic; }
+  bool is_valid() const { return sig == c_magic; }
   uint32_t sig;
   uint16_t writer_ver;
   uint16_t ver_to_extract;
@@ -224,6 +318,7 @@ struct Cd_hdr
   uint64_t        size64;
   std::string     path;
   operator bool() const { return raw.is_valid(); }
+  bool read_it(Stream_no_lock& in, std::vector<char>& temp_buffer);
   I3S_EXPORT bool read_it(std::istream* in);
   I3S_EXPORT bool read_it(Stream_like* in);
   I3S_EXPORT void write(std::ostream* out);
@@ -251,11 +346,11 @@ zip64 extensible data sector    (variable size)*/
 
 struct End_of_cd_64
 {
-  static const uint32_t k_magic = 0x06064b50;
+  static constexpr uint32_t c_magic = 0x06064b50;
   End_of_cd_64() {}
 
   End_of_cd_64(uint64_t count, uint64_t cd_size_, uint64_t offset) :
-    sig(k_magic), size_this_packet(sizeof(End_of_cd_64) - 12), writer_ver(45), ver_to_extract(45), num_disk(0), disk0(0),
+    sig(c_magic), size_this_packet(sizeof(End_of_cd_64) - 12), writer_ver(45), ver_to_extract(45), num_disk(0), disk0(0),
     num_entries_this_disk(count), num_entries_total(count), cd_size(cd_size_), offset_cd(offset)
   {}
 
@@ -285,9 +380,9 @@ total number of disks           4 bytes
 */
 struct End_of_cd_locator_64
 {
-  static const uint32_t k_magic = 0x07064b50;
+  static constexpr uint32_t c_magic = 0x07064b50;
   End_of_cd_locator_64() {}
-  explicit End_of_cd_locator_64(uint64_t offset) : sig(k_magic), disk0_cd64(0), offset_to_eocd64(offset), num_disk(1) {}
+  explicit End_of_cd_locator_64(uint64_t offset) : sig(c_magic), disk0_cd64(0), offset_to_eocd64(offset), num_disk(1) {}
   uint32_t sig;
   uint32_t disk0_cd64;
   uint64_t offset_to_eocd64;
@@ -314,12 +409,12 @@ the starting disk number        4 bytes
 */
 struct End_of_cd_legacy
 {
-  static const uint32_t k_magic = 0x06054b50;
+  static constexpr uint32_t c_magic = 0x06054b50;
   
   End_of_cd_legacy() {}
 
   End_of_cd_legacy(uint64_t count, uint64_t cd_size, uint64_t offset) :
-    sig(k_magic), num_disk(0), disk0(0), num_entries_this_disk(count > 0xFFFF ? 0xFFFF : (uint16_t)count)
+    sig(c_magic), num_disk(0), disk0(0), num_entries_this_disk(count > 0xFFFF ? 0xFFFF : (uint16_t)count)
     , num_entries(count > 0xFFFF ? 0xFFFF : (uint16_t)count)
     , size_of_cd(cd_size > (uint64_t)c_ones_32 ? c_ones_32 : (uint32_t)cd_size)
     , offset_to_cd(offset > (uint64_t)c_ones_32 ? c_ones_32 : (uint32_t)offset)
@@ -338,8 +433,4 @@ struct End_of_cd_legacy
 };
 #pragma pack(pop)
 
-}
-
-}
-
-} // namespace i3slib
+} // namespace i3slib::utl::detail

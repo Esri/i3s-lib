@@ -32,8 +32,8 @@ namespace utl
 namespace
 {
 
-static_assert((Mime_type_set)Mime_type::_next_ == 256, "Please update constants 'string' below");
-constexpr int c_type_ext_count = 7;
+static_assert((Mime_type_set)Mime_type::_next_ == 1024, "Please update constants 'string' below");
+constexpr int c_type_ext_count = 9;
 const char* const c_type_ext[c_type_ext_count]
 {
   //MUST BE IN POWER OF 2 ORDER ( to_known_mime_type() expects this)
@@ -43,7 +43,9 @@ const char* const c_type_ext[c_type_ext_count]
   "png", // = 16,
   "dds",// = 32,
   "bin.dds",// = 64,
-  "bin.ktx"// = 128,
+  "bin.ktx",// = 128,
+  "basis",// = 256,
+  "ktx2" // = 1024,
 };
 
 static_assert((Mime_encoding_set)Mime_encoding::_next_ == 32, "Please update constants 'string' below");

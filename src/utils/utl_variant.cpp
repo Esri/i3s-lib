@@ -22,7 +22,111 @@ email: contracts@esri.com
 #include <stdint.h>
 #include <cstring>
 #include <limits>
-#include <cstring>
+#include <array>
+#include <memory>
+#include <optional>
+#include <string>
+#include <charconv>
+
+#if defined(_MSC_VER) && _MSC_VER >= 1900
+#include <algorithm>
+#include <string_view>
+#include <type_traits>
+#define HAS_FP_CHARCONV
+#else
+#include <sstream>
+#endif
+
+namespace
+{
+  template<typename Char>
+  std::basic_string_view<Char> trim_whitespaces(const std::basic_string_view<Char> sv)
+  {
+    auto it = sv.begin();
+    auto end_it = sv.end();
+    for (;;)
+    {
+      if (it == end_it)
+        return std::basic_string_view<Char>();
+      if (!std::isspace(*it)) break;
+      ++it;
+    }
+
+    for (;;)
+    {
+      auto prev_end_it = std::prev(end_it);
+      if (!std::isspace(*prev_end_it))
+        return std::basic_string_view<Char>(&*it, std::distance(it, end_it));
+      end_it = prev_end_it;
+    }    
+  }
+
+  std::optional<double> to_double(const std::string& s)
+  {
+#ifdef HAS_FP_CHARCONV
+    double value = 0.0;
+    auto sv = trim_whitespaces(std::string_view(s));
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), value);
+    if (ec == std::errc::invalid_argument || ec == std::errc::result_out_of_range)
+    {
+      I3S_ASSERT(false);
+      return {};
+    }
+    return value;
+#else
+    std::istringstream iss(s);
+    iss.imbue(std::locale::classic());
+    double val;
+    iss >> val;
+    if (iss.fail())
+      return {};
+    else
+      return val;
+    //return std::stod(_get_string()); //WARNING: This function depends on the local which could be a problem.
+#endif
+
+  }
+
+  std::optional<double> to_double(const std::wstring& ws)
+  {
+#ifdef HAS_FP_CHARCONV
+    double value = 0.0;
+    auto wv = trim_whitespaces(std::wstring_view(ws));
+    constexpr auto buffer_size = 2 * std::numeric_limits<double>::max_digits10;
+    std::array<char, buffer_size> buffer;
+    std::string s;
+    char* b = nullptr;
+    if (wv.size() <= buffer_size)
+    {
+      b = buffer.data();
+    }
+    else
+    {
+      s.resize(wv.size());
+      b = s.data();
+    }
+    std::transform(wv.begin(), wv.end(), b, [](auto c) { return static_cast<char>(c); });
+    auto [ptr, ec] = std::from_chars(b, b + wv.size(), value);
+    if (ec == std::errc::invalid_argument || ec == std::errc::result_out_of_range)
+    {
+      I3S_ASSERT(false);
+      return {};
+    }
+    return value;
+#else
+    std::wistringstream iss(ws);
+    iss.imbue(std::locale::classic());
+    double val;
+    iss >> val;
+    if (iss.fail())
+      return {};
+    else
+      return val;
+    //return std::stod(_get_string()); //WARNING: This function depends on the local which could be a problem. 
+#endif
+  }
+
+}
 
 namespace i3slib
 {
@@ -52,77 +156,104 @@ Variant& Variant::operator=(const Variant& src)
   return *this;
 }
 
-std::string   escape_special_char_for_json(const std::string& src)
+namespace
 {
-  static const int  c_count = 6;
-  static const char c_special[c_count] = { '\b', '\t', '\n','\r', '"', '\\' }; //in c
-  static const char c_escaped[c_count] = { 'b', 't', 'n','r', '"', '\\' }; // in json
-  std::string out;
-  out.reserve(src.size());
-  bool is_special;
-  for (auto &c : src)
+
+// We would like to use to_chars whenever possible, but its support is poor on some platforms.
+// Microsoft's standard library has to_chars implemented for both integer and floating-point types.
+// On Linux libstdc++ only provides to_chars for integer types.
+// XCode's <charconv> only has to_chars for integer types, but even those may be disabled depending
+// on the target OS / version.
+// The code below tries to detect whether there's to_chars overload for particular types.
+// If to_chars is not available, we have to use to_string or stringstream.
+
+[[maybe_unused]] constexpr bool has_to_chars_integral_(...) { return false; }
+
+template<
+  typename T,
+  std::to_chars_result(*F)(char*, char*, T, int) = std::to_chars,
+  typename = std::void_t<decltype(std::to_chars(nullptr, nullptr, T{}, 10))>
+>
+constexpr bool has_to_chars_integral_(T) { return true; }
+
+[[maybe_unused]] constexpr bool has_to_chars_fp_(...) { return false; }
+
+template<
+  typename T,
+  std::to_chars_result(*F)(char*, char*, T) = std::to_chars,
+  typename = std::void_t<decltype(std::to_chars(nullptr, nullptr, T{}))>
+>
+constexpr bool has_to_chars_fp_(T) { return true; }
+
+template<typename T>
+constexpr size_t get_buffer_size()
+{
+  if constexpr (std::is_floating_point<T>::value)
   {
-    is_special = false;
-    for (int i = 0; i < c_count; ++i)
-      if (c_special[i] == c)
-      {
-        out.push_back('\\');
-        out.push_back(c_escaped[i]);
-        is_special = true;
-        break;
-      }
-    if (!is_special)
-      out.push_back(c);
+    // Besides max digits we may need space for sign, decimal dot, what else?
+    return std::numeric_limits<T>::max_digits10 + 16;
   }
-  return out;
+  else
+    return std::numeric_limits<T>::digits10 + 1 + static_cast<size_t>(std::is_signed<T>::value);
+};
+
+template<typename T>
+std::string to_chars_(T value)
+{
+  std::array<char, get_buffer_size<T>()> buf;
+  const auto res = std::to_chars(buf.data(), buf.data() + buf.size(), value);
+  I3S_ASSERT(res.ec == std::errc());
+  return std::string(buf.data(), res.ptr);
 }
 
- 
-std::ostream& Variant::_to_string_internal(std::ostream& out, const Variant& v, Variant::format_str_fct format_fct)
+template<typename T>
+std::string to_string_integral_(T value)
 {
-  std::ios old_state(nullptr);
-  old_state.copyfmt(out);
-  switch (v.m_type)
+  if constexpr (has_to_chars_integral_(T{}))
+    return to_chars_(value);
+  else
+    return std::to_string(value);
+}
+
+template<typename T>
+std::string to_string_fp_(T value)
+{
+  if constexpr (has_to_chars_fp_(T{}))
+    return to_chars_(value);
+  else
   {
-    case Variant_trait::Type::Bool:  out << v._get_scalar_value< bool >(); break;
-    case Variant_trait::Type::Int8:  out << (int)v._get_scalar_value< int8_t >(); break;
-    case Variant_trait::Type::Uint8: out << (int)v._get_scalar_value< uint8_t >(); break;
-    case Variant_trait::Type::Int16: out << v._get_scalar_value< int16_t >(); break;
-    case Variant_trait::Type::Uint16:out << v._get_scalar_value< uint16_t >(); break;
-    case Variant_trait::Type::Int32: out << v._get_scalar_value< int32_t >(); break;
-    case Variant_trait::Type::Uint32:out << v._get_scalar_value< uint32_t >(); break;
-    case Variant_trait::Type::Int64: out << v._get_scalar_value< int64_t >(); break;
-    case Variant_trait::Type::Uint64:out << v._get_scalar_value< uint64_t >(); break;
-    case Variant_trait::Type::Float: out << std::setprecision(std::numeric_limits<float>::max_digits10)
-      << v._get_scalar_value< float >(); break;
-    case Variant_trait::Type::Double:out << std::setprecision(std::numeric_limits<double>::max_digits10)
-      << v._get_scalar_value< double >(); break;
-    case Variant_trait::Type::String:out << (*format_fct)(v._get_string()); break;
-    case Variant_trait::Type::WString:out << (*format_fct)(utf16_to_utf8(v._get_wstring())); break;
-    case Variant_trait::Type::Not_set:
-      out << (*format_fct)("<Null>"); //TBD
-    default:
-      I3S_ASSERT_EXT(false);
+    std::stringstream str;
+    str.imbue(std::locale::classic());
+    str.precision(std::numeric_limits<T>::max_digits10);
+    str << value;
+    return str.str();
   }
-  out.copyfmt(old_state);
-
-  return out;
 }
 
-//! this function is used in the context where 'out' is UTF-8 text stream (not binary stream)
-//! for string, JSON special char as escaped and quotes are added.
-std::ostream& operator<<(std::ostream& out, const Variant& v)
-{
-  out << std::boolalpha; // "true"/ "false", not "0"/"1"
-
-  return Variant::_to_string_internal(out, v, escape_special_char_for_json);
 }
 
-std::string  Variant::to_string() const
+std::string Variant::to_string() const
 {
-std::ostringstream oss;
-Variant::_to_string_internal(oss, *this, [](const std::string& src) { return src; });
-return oss.str();
+  switch (m_type)
+  {
+  case Variant_trait::Type::Bool:    return _get_scalar_value<bool>() ? "true" : "false";
+  case Variant_trait::Type::Int8:    return to_string_integral_(_get_scalar_value<int>());
+  case Variant_trait::Type::Uint8:   return to_string_integral_(_get_scalar_value<uint8_t>());
+  case Variant_trait::Type::Int16:   return to_string_integral_(_get_scalar_value<int16_t>());
+  case Variant_trait::Type::Uint16:  return to_string_integral_(_get_scalar_value<uint16_t>());
+  case Variant_trait::Type::Int32:   return to_string_integral_(_get_scalar_value<int32_t>());
+  case Variant_trait::Type::Uint32:  return to_string_integral_(_get_scalar_value<uint32_t>());
+  case Variant_trait::Type::Int64:   return to_string_integral_(_get_scalar_value<int64_t>());
+  case Variant_trait::Type::Uint64:  return to_string_integral_(_get_scalar_value<uint64_t>());
+  case Variant_trait::Type::Float:   return to_string_fp_(_get_scalar_value<float>());
+  case Variant_trait::Type::Double:  return to_string_fp_(_get_scalar_value<double>());
+  case Variant_trait::Type::String:  return _get_string();
+  case Variant_trait::Type::WString: return utf16_to_utf8(_get_wstring());
+  case Variant_trait::Type::Not_set: return "<Null>"; //TBD
+  default:
+    I3S_ASSERT_EXT(false);
+    return {};
+  }
 }
 
 bool  operator==(const Variant& a, const Variant& b)
@@ -163,21 +294,11 @@ double  Variant::to_double() const noexcept
   {
     case Variant_trait::Type::String:
     {
-      std::istringstream iss(_get_string());
-      iss.imbue(std::locale::classic());
-      double val;
-      iss >> val;
-      return val;
-      //return std::stod(_get_string()); //WARNING: This function depends on the local which could be a problem. 
+      return ::to_double(_get_string()).value_or(0.0);
     }
     case Variant_trait::Type::WString:
     {
-      std::wistringstream iss(_get_wstring());
-      iss.imbue(std::locale::classic());
-      double val;
-      iss >> val;
-      return val;
-      //return std::stod(_get_string()); //WARNING: This function depends on the local which could be a problem. 
+      return ::to_double(_get_wstring()).value_or(0.0);
     }
     case Variant_trait::Type::Bool:  return (double)_get_scalar_value< bool >();
     case Variant_trait::Type::Int8:  return (double)_get_scalar_value< int8_t >();
@@ -217,6 +338,35 @@ void Variant::_copy_from(const Variant& src) noexcept
       }
       m_scalar_copy = src.m_scalar_copy;
       break;
+  }
+}
+
+std::any Variant::to_any() const noexcept
+{
+  switch (m_type)
+  {
+    case Variant_trait::Type::String:
+    {
+      return {_get_string()};
+    }
+    case Variant_trait::Type::WString:
+    {
+      return {utf16_to_utf8(_get_wstring())};
+    }
+    case Variant_trait::Type::Bool:  return {_get_scalar_value<bool>()};
+    case Variant_trait::Type::Int8:  return {_get_scalar_value<int8_t>()};
+    case Variant_trait::Type::Uint8: return {_get_scalar_value<uint8_t>()};
+    case Variant_trait::Type::Int16: return {_get_scalar_value<int16_t>()};
+    case Variant_trait::Type::Uint16:return {_get_scalar_value<uint16_t>()};
+    case Variant_trait::Type::Int32: return {_get_scalar_value<int32_t>()};
+    case Variant_trait::Type::Uint32:return {_get_scalar_value<uint32_t>()};
+    case Variant_trait::Type::Int64: return {_get_scalar_value<int64_t>()};
+    case Variant_trait::Type::Uint64:return {_get_scalar_value<uint64_t>()};
+    case Variant_trait::Type::Float: return {_get_scalar_value<float>()};
+    case Variant_trait::Type::Double:return {_get_scalar_value<double>()};
+    default:
+      I3S_ASSERT(false);
+      return {};
   }
 }
 

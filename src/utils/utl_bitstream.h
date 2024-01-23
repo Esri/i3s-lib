@@ -58,7 +58,7 @@ inline void for_each_bit_set(T val, Pred pred)
 
 //! return 0 if input =0, return the bitnumber +1 otherwise.
 template< class T >
-inline int first_bit_set(T num) noexcept
+inline constexpr int first_bit_set(T num) noexcept
 {
   uint32_t i = 0;
   while (num)
@@ -99,13 +99,13 @@ inline int count_bit_set(uint64_t bits, int bit_number)
   return count;
 }
 
-//! returns true for zero
-inline bool is_power_of_two(uint32_t n)
+//! returns true if n == 1u << k for some k
+inline constexpr bool is_power_of_two(uint32_t n)
 {
-  return  (n & (n - 1)) == 0;
+  return  (n & (n - 1)) == 0; // checks that there is no bit set in n except the most significant one
 }
 
-inline uint32_t round_up_power_of_two(uint32_t v) noexcept
+inline constexpr uint32_t round_up_power_of_two(uint32_t v) noexcept
 {
   v--;
   v |= v >> 1;
@@ -119,8 +119,14 @@ inline uint32_t round_up_power_of_two(uint32_t v) noexcept
 
 inline uint32_t round_down_power_of_two(uint32_t v) noexcept
 {
-  return round_up_power_of_two(v) >>1u;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;
+  return v - (v >> 1);
 }
+
 inline uint32_t nearest_power_of_two(uint32_t v) noexcept
 {
   int hi = round_up_power_of_two(v);

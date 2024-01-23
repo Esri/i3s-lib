@@ -71,6 +71,8 @@ private:
   std::unique_ptr<Png_writer_impl> m_pimpl;
 };
 
+I3S_EXPORT bool encode_png(const uint8_t* raw_bytes, int w, int h, bool has_alpha, std::vector<uint8_t>& png_bytes);
+
 }//endof ::utl
 
 } // namespace i3slib

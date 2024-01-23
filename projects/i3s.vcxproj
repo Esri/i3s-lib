@@ -27,21 +27,18 @@
     <ProjectGuid>{EE10B2DD-058B-4AFD-A22F-A9FF4502A170}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>i3ssdk</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -83,7 +80,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>draco.lib;lepcc.lib;libpng16d.lib;jpeg.lib;zlibd.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\3rdparty\draco\lib\$(Platform)\$(Configuration);..\3rdparty\lepcc\lib\$(Platform)\$(Configuration);..\3rdparty\libjpeg\lib\$(Platform)\$(Configuration);..\3rdparty\libpng\lib\$(Platform)\$(Configuration);..\3rdparty\zlib\lib\$(Platform)\$(Configuration);..\3rdparty\etc2comp\lib\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\3rdparty\draco\lib\$(Platform)\$(Configuration);..\3rdparty\lepcc\lib\$(Platform)\$(Configuration);..\3rdparty\libjpeg\lib\$(Platform)\$(Configuration);..\3rdparty\libpng\lib\$(Platform)\$(Configuration);..\3rdparty\zlib\lib\$(Platform)\$(Configuration);..\3rdparty\etc2comp\lib\$(Platform)\$(Configuration);..\3rdparty\basisu\lib\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -108,7 +105,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>draco.lib;lepcc.lib;libpng16.lib;jpeg.lib;zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\3rdparty\draco\lib\$(Platform)\$(Configuration);..\3rdparty\lepcc\lib\$(Platform)\$(Configuration);..\3rdparty\libjpeg\lib\$(Platform)\$(Configuration);..\3rdparty\libpng\lib\$(Platform)\$(Configuration);..\3rdparty\zlib\lib\$(Platform)\$(Configuration);..\3rdparty\etc2comp\lib\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\3rdparty\draco\lib\$(Platform)\$(Configuration);..\3rdparty\lepcc\lib\$(Platform)\$(Configuration);..\3rdparty\libjpeg\lib\$(Platform)\$(Configuration);..\3rdparty\libpng\lib\$(Platform)\$(Configuration);..\3rdparty\zlib\lib\$(Platform)\$(Configuration);..\3rdparty\etc2comp\lib\$(Platform)\$(Configuration);..\3rdparty\basisu\lib\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

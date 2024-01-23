@@ -23,6 +23,7 @@ email: contracts@esri.com
 #include <locale>
 #include <codecvt>
 #include <cstring>
+#include <algorithm>
 
 #ifdef PCSL_WIDE_STRING_OS
 #include "utils/win/utl_windows.h"
@@ -57,6 +58,26 @@ String_t trim_quotes_(const String_t& s)
 
 }
 
+// trim from start (in place)
+static void ltrim(std::string& s) {
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+    return !std::isspace(ch);
+  }));
+}
+
+// trim from end (in place)
+static void rtrim(std::string& s) {
+  s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+    return !std::isspace(ch);
+  }).base(), s.end());
+}
+
+// trim from both ends (in place)
+void trim_in_place(std::string& s) {
+  ltrim(s);
+  rtrim(s);
+}
+
 std::string trim_quotes(const std::string& s)
 {
   return trim_quotes_(s);
@@ -83,6 +104,24 @@ std::string utf16_to_utf8(const std::wstring& s)
   out.pop_back();
   return out;
 }
+
+std::wstring utf8_to_utf16(std::string_view s)
+{
+  std::wstring ret;
+  if (s.size() == 0)
+    return ret;
+
+  int n_char = ::MultiByteToWideChar(CP_UTF8, 0, std::data(s), static_cast<int>(std::size(s)), nullptr, 0);
+  ret.resize(static_cast<size_t>(n_char));
+
+  if (n_char)
+  {
+    n_char = ::MultiByteToWideChar(CP_UTF8, 0, std::data(s), static_cast<int>(std::size(s)), std::data(ret), n_char);
+    I3S_ASSERT_EXT(n_char);
+  }
+  return ret;
+}
+
 #else
 // NOTE:
 // using std::wstring_convert is about 100 SLOWER than using WideCharToMultiByte
@@ -96,6 +135,7 @@ std::string utf16_to_utf8(const std::wstring& s)
 }
 #endif
 
+
 #ifdef PCSL_WIDE_STRING_OS
 
 std::string os_to_utf8(const String_os& s)
@@ -103,20 +143,14 @@ std::string os_to_utf8(const String_os& s)
   return utf16_to_utf8(s);
 }
 
-String_os utf8_to_os(const std::string& s)
+String_os utf8_to_os(std::string_view s)
 {
-  String_os ret;
-  if (s.size() == 0)
-    return ret;
+  return utf8_to_utf16(s);
+}
 
-  int n_char = MultiByteToWideChar(CP_UTF8, 0, &s[0], (int)s.size(), nullptr, 0);
-  ret.resize(n_char);
-  if (n_char)
-  {
-    n_char = MultiByteToWideChar(CP_UTF8, 0, &s[0], (int)s.size(), &ret[0], n_char);
-    I3S_ASSERT_EXT(n_char);
-  }
-  return ret;
+String_os utf8_to_os(std::string&& s)
+{
+  return utf8_to_utf16(s);
 }
 
 String_os trim_quotes(const String_os& s)
@@ -128,43 +162,20 @@ int stricmp(const char* a, const char* b)
 {
   return _stricmp(a, b);
 }
+
+#else
+
+String_os utf8_to_os(std::string_view s)
+{
+  return std::string(s);
+}
+
+String_os utf8_to_os(std::string&& s)
+{
+  return s;
+}
+
 #endif
-
-std::string encode_double_quote(const std::string& before)
-{
-  std::string after;
-  if (!before.size())
-    return after;
-  after.reserve(before.length() + 10);
-  for (std::string::size_type i = 0; i < before.length(); ++i)
-  {
-    switch (before[i]) {
-      case '"':
-      case '\\':
-        after += '\\';
-        // Fall through.
-      default:
-        after += before[i];
-    }
-  }
-  return after;
-}
-
-std::string decode_double_quote(const std::string& before)
-{
-  std::string after;
-  if (!before.size())
-    return after;
-  after.reserve(before.length());
-  for (std::string::size_type i = 0; i < before.length() - 1; ++i)
-  {
-    if (before[i] != '\\' || before[i + 1] != '"')
-      after += before[i];
-  }
-  after += before.back();
-  return after;
-}
-
 
 void replace_all(std::string& str, const std::string& from, const std::string& to)
 {

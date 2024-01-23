@@ -60,7 +60,7 @@ private:
   pixel_t*    m_data=nullptr;
   bool        m_is_owned=false;
   bool m_blocked = false;
-  int m_capacity_in_bytes = 0;
+  size_t m_capacity_in_bytes = 0;
 };
 
 }

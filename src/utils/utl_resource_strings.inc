@@ -16,13 +16,20 @@ Attn: Contracts Dept
 Redlands, California, USA 92373
 email: contracts@esri.com
 */
-
 { IDS_I3S_OK, u8"Success" },
 { IDS_I3S_IO_OPEN_FAILED, u8"Failed to open File %1" },
 { IDS_I3S_IO_WRITE_FAILED, u8"Failed to write to File %1" },
 { IDS_I3S_INTERNAL_ERROR, u8"Unexpected Error  %1" },
 { IDS_I3S_COMPRESSION_ERROR, u8"Failed to compress data %1 using method [%2]" },
 { IDS_I3S_DEGENERATED_MESH, u8"Data %1 contains only degenerated faces" },
+{ IDS_I3S_IO_REMOVE_FILE_FAILED, u8"Failed to remove %1" },
+{ IDS_I3S_IO_NOT_FOUND, u8"Resource not found %1" },
+{ IDS_I3S_IO_READ_FAILED, u8"Read failed %1" },
+{ IDS_I3S_IO_CRC_MISMATCH, u8"CRC Mismatch %1" },
+{ IDS_I3S_IO_INVALID_ARCH_NOT_STORE, u8"Invalid archive method not store %1" },
+{ IDS_I3S_IO_INVALID_ARCH_NOT_OPEN, u8"Invalid archive not open %1" },
+{ IDS_I3S_IO_INVALID_ARCH_LOST_CONN, u8"Invalid archive lost connection %1" },
+{ IDS_I3S_IO_BUFFER_TOO_SMALL, u8"Buffer too small %1" },
 { IDS_I3S_VISITING_NODE, u8"Node: %1" },
 { IDS_I3S_OUT_OF_RANGE_ID, u8"\"%1\" = %2 out-of- range  [0, %3]" },
 { IDS_I3S_TYPE_MISMATCH, u8"Unexpected %1 type (%2). Expected %3 " },
@@ -36,6 +43,9 @@ email: contracts@esri.com
 { IDS_I3S_INVALID_LOD_METRIC, u8"Invalid or missing LOD metric in node %1" },
 { IDS_I3S_EXPECTS, u8"Expected value \"%2\" for %1. Got \"%3\"" },
 { IDS_I3S_UNSUPPORTED_VERSION, u8"I3S version \"%1\" is not supported (expected %2 ≤ version < %3)" },
+{ IDS_I3S_MISSING_VERSION, u8"Missing version" },
+{ IDS_I3S_LOW_ENCODING_PRECISION, u8"Geometry encoding precision for node %1 is estimated to be %2 bits but %3 bits were expected." },
+{ IDS_I3S_PROJ_ENGINE_TRANS_ERROR, u8"Projection engine transformation error!" },
 { IDS_I3S_PATH_COMPATIBILITY_WARNING, u8"URL '%2' for resource %1 may not be supported by Esri products. (Compatible alternative would be: '%3' )" },
 { IDS_I3S_INVALID_EXTENT, u8"Extent %1 is invalid" },
 { IDS_I3S_DUPLICATE_ATTRIBUTE_KEY, u8"Attribute key '%1' must be unique per layer" },
@@ -72,4 +82,5 @@ email: contracts@esri.com
 { IDS_I3S_ATTRIBUTE_VALUE_COUNT_MISMATCH, u8"%2 value(s) found in attribute buffer %1 (expected : %3 )" },
 { IDS_I3S_TEX_ATLAS_VERTEX_REGION_MISMATCH, u8"(%1): sharedResources property texture.atlas (=%2) does not match property material.use_vertex_region (=%3)" },
 { IDS_I3S_LEGACY_TEX_ATLAS_FLAG_MISMATCH, u8"(%1): Legacy sharedResources textureDefinitionInfo.atlas: %2 mismatches with textureSetDefinition.atlas: %3" },
-{ IDS_I3S_MISSING_VERSION, u8"Missing version" },
+{ IDS_I3S_DXT_NPOT_IMAGE, u8"Texture in node %1 has non-power-of-two size %2 while DXT compression is enabled. The texture will be scaled to a power of two size for the DXT output." },
+{ IDS_I3S_EMPTY_FULL_EXTENT, u8"SLPK full extent cannot be empty." },

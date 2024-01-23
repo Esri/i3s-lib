@@ -21,8 +21,7 @@ email: contracts@esri.com
 #include "utils/utl_i3s_assert.h"
 #include "utils/utl_string.h"
 #include <stdint.h>
-#include <array>
-#include <iomanip>
+#include <any>
 
 namespace i3slib
 {
@@ -65,24 +64,32 @@ class I3S_EXPORT Variant
 public:
   enum class Memory : char { Copy, Shared };
 
-  Variant() = default;
-  //constexpr Variant() : m_type(Variant_trait::Type::Not_set), m_memory( Memory::Copy){}
+  constexpr Variant() = default;
+
   template< class T > Variant(T* v, Memory ownership) noexcept;
   template< class T > explicit Variant(const T& v) noexcept;
   Variant(const Variant&);
+
+  Variant(Variant&&) noexcept;
+  explicit Variant(std::string&& str);
+
   Variant& operator=(const Variant&);
+  Variant& operator=(Variant&& other) noexcept;
+
   ~Variant();
 
-  template< class T > void      set(const T& v) noexcept;
+  template< class T > void      set(T v) noexcept;
+
   template< class T > const T&   get() const noexcept;
   
   double                         to_double() const noexcept;
   std::string                    to_string() const;
+  std::any                       to_any() const noexcept;
 
   template< class Y, class Y_Trait > Y         to_variant() const noexcept;
   Variant_trait::Type           get_type() const { return m_type; }
   bool                          is_valid() const { return m_type != Variant_trait::Type::Not_set; }
-  I3S_EXPORT friend std::ostream&          operator<<(std::ostream& out, const Variant& v);
+  
   I3S_EXPORT friend bool                   operator==(const Variant& a, const Variant& b);
   I3S_EXPORT friend bool                   operator<(const Variant& a, const Variant& b);
   // TDB: the following functions are used for binary serialization. 
@@ -99,7 +106,8 @@ private:
   void                      _copy_from(const Variant& src) noexcept;
 
   typedef std::string(*format_str_fct)(const std::string& src);
-  static std::ostream&      _to_string_internal(std::ostream& out, const Variant& v, format_str_fct);
+  template<typename T> std::string to_string_internal_() const;
+
 private:
   union
   {
@@ -112,6 +120,37 @@ private:
   Memory              m_memory= Memory::Copy; //1 byte
 };
 
+inline Variant::Variant(Variant&& src) noexcept :
+  m_scalar_copy(src.m_scalar_copy),
+  m_type(src.m_type),
+  m_memory(src.m_memory)
+{
+  src.m_scalar_copy = 0;
+  src.m_type = Variant_trait::Type::Not_set;
+  src.m_memory = Memory::Copy;
+}
+
+inline Variant& Variant::operator=(Variant&& src) noexcept
+{
+  if (&src != this)
+  {
+    m_scalar_copy = src.m_scalar_copy;
+    m_type = src.m_type;
+    m_memory = src.m_memory;
+
+    src.m_scalar_copy = 0;
+    src.m_type = Variant_trait::Type::Not_set;
+    src.m_memory = Memory::Copy;
+  }
+
+  return *this;
+}
+
+inline Variant::Variant(std::string&& str)
+  : m_type(Variant_trait::Type::String)
+  , m_memory(Memory::Copy)
+  , m_string_ptr(new std::string(std::move(str)))
+{}
 
 template< class T >
 inline Variant::Variant(const T& v) noexcept
@@ -121,7 +160,6 @@ inline Variant::Variant(const T& v) noexcept
   static_assert(sizeof(v) <= sizeof(m_scalar_copy), "Only <= 64 bit scalar may be used as template parameter.");
   new(&m_scalar_copy) T(v);
 }
-
 
 template<>
 inline Variant::Variant(const std::string& v) noexcept
@@ -187,7 +225,7 @@ inline Variant::~Variant()
 }
 
 template< class T > 
-inline void Variant::set(const T& v) noexcept
+inline void Variant::set(T v) noexcept
 { 
   static_assert( sizeof(T) <= sizeof( m_scalar_copy), "Expected <= 64 bit scalar" );
   m_type = Variant_trait::get_type<T>(); 
@@ -195,17 +233,19 @@ inline void Variant::set(const T& v) noexcept
 }
 
 template<>
-inline void Variant::set(const std::string& v) noexcept
+inline void Variant::set(std::string v) noexcept
 {
-  m_type = Variant_trait::Type::String;
-  *m_string_ptr= v; //shared or copy.
+  I3S_ASSERT_EXT(m_type == Variant_trait::Type::String);
+  //m_type = Variant_trait::Type::String;
+  *m_string_ptr = std::move(v); //shared or copy.
 }
 
 template<>
-inline void Variant::set(const std::wstring& v) noexcept
+inline void Variant::set(std::wstring v) noexcept
 {
-  m_type = Variant_trait::Type::WString;
-  *m_wstring_ptr = v; //shared or copy.
+  I3S_ASSERT_EXT(m_type == Variant_trait::Type::WString);
+  //m_type = Variant_trait::Type::WString;
+  *m_wstring_ptr = std::move(v); //shared or copy.
 }
 
 template< class T > inline const T&  Variant::get() const noexcept

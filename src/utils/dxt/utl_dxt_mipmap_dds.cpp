@@ -17,7 +17,7 @@ Redlands, California, USA 92373
 email: contracts@esri.com
 */
 
-#include "utl_dxt_mipmap_dds.h"
+#include "utils/dxt/utl_dxt_mipmap_dds.h"
 #include "utils/utl_jpeg.h"
 #include "utils/utl_bitstream.h"
 #include "IntelDXTCompressor.h"
@@ -71,30 +71,32 @@ private:
 
 void DDS_buffer::create_with_mips_aligned(int w, int h, DDS_buffer* ret_p, bool has_alpha)
 {
+  constexpr int c_dxt1_block_size = 8;
+  constexpr int c_dxt5_block_size = 16;
+  const auto block_size = has_alpha ? c_dxt5_block_size : c_dxt1_block_size;
 
-  static const int c_dxt1_block_size = 8;
-  static const int c_dxt5_block_size = 16;
   DDS_buffer& ret = *ret_p;
 
-  //ret.load_from_dds_file(L"");
-
   //compute the mips size:
-  int mip_w=w, mip_h=h;
-  int mips_count = utl::first_bit_set(std::max(mip_w, mip_h));
-  ret.m_mip_offsets[0] = c_magic_and_header_size;
+  int mip_w = w, mip_h = h;
+  const int mips_count = utl::first_bit_set(std::max(mip_w, mip_h));
+  int offset = c_magic_and_header_size;
 
-  for (int i= 0; i <= mips_count; i++)
+  for (int i = 0; i < mips_count; i++)
   {
-    int bytes = std::max(1, ((mip_w + 3) / 4)) * std::max(1, ((mip_h + 3) / 4)) * (has_alpha ? c_dxt5_block_size: c_dxt1_block_size );
-    I3S_ASSERT(( bytes % c_sse_alignment ) == 0 || bytes == 8); //so all MIP buffer are 16 bytes align if the base address is.
-    ret.m_mip_offsets[i+1] = ret.m_mip_offsets[i] + bytes;
+    int bytes = std::max(1, (mip_w + 3) / 4) * std::max(1, (mip_h + 3) / 4) * block_size;
+    I3S_ASSERT((bytes % c_sse_alignment) == 0 || bytes == 8); //so all MIP buffer are 16 bytes align if the base address is.
+
+    ret.m_mip_offsets[i] = offset;
+    offset += bytes;
+
     mip_w >>= 1;
     mip_h >>= 1;
   }
 
   // --- alloc the DDS buffer with magix, header and mips:
   //ret.m_data = (BYTE*)_aligned_malloc(ret.m_mip_offsets[mips_count], c_sse_alignment);
-  auto buff = std::make_shared< Buffer >(nullptr, ret.m_mip_offsets[mips_count], utl::Buffer::Memory::Deep_aligned, c_sse_alignment);
+  auto buff = std::make_shared< Buffer >(nullptr, offset, utl::Buffer::Memory::Deep_aligned, c_sse_alignment);
   ret.m_data = buff->create_writable_view();
   memset(ret.m_data.data(), 0, c_magic_and_header_size);
   // --- set magic:
@@ -107,7 +109,7 @@ void DDS_buffer::create_with_mips_aligned(int w, int h, DDS_buffer* ret_p, bool 
   hdr.width = w;
   //from the MSFT docs, it could be both...
   //hdr.pitchOrLinearSize = std::max(1, ((w + 3) / 4)) * c_dxt1_block_size;
-  hdr.pitchOrLinearSize = std::max(1, ((w + 3) / 4)) * std::max(1, ((h + 3) / 4)) * (has_alpha ? c_dxt5_block_size : c_dxt1_block_size);
+  hdr.pitchOrLinearSize = std::max(1, (w + 3) / 4) * std::max(1, (h + 3) / 4) * block_size;
   hdr.mipMapCount = mips_count;
   hdr.ddspf = has_alpha ? DirectX::DDSPF_DXT5 : DirectX::DDSPF_DXT1;
   hdr.caps = DDS_SURFACE_FLAGS_MIPMAP | DDS_SURFACE_FLAGS_TEXTURE;
@@ -170,6 +172,9 @@ bool    compress_to_dds_with_mips( Image_2d& src, bool has_alpha, utl::Buffer_vi
       break;
     //create the mipmap:
     Image_2d::mipmap_blocked4x4(src, &dst);
+    if (!dst.data())
+      return false;
+
     src.swap(dst);
     ++lod;
   }

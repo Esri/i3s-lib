@@ -1,0 +1,61 @@
+# Copyright 2022 Esri
+# 
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+# this file except in compliance with the License. You may obtain a copy of
+# the License at http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software distributed
+# under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+# CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+# 
+# For additional information, contact:
+# Environmental Systems Research Institute, Inc.
+# Attn: Contracts Dept
+# 380 New York Street
+# Redlands, California, USA 92373
+# email: contracts@esri.com
+
+cmake_minimum_required(VERSION 3.10)
+
+# Not putting a project directive here causes a warning to be emitted by CMake.
+# The original basisu CMakeLists.txt included below has exactly the same project
+# directive at the beginning and CMake doesn't complain of the repetition.
+# (An alternative approach is not to put a project directive here and just
+# suppress the warning with -Wno-dev).
+project(basisu)
+
+include(backup/CMakeLists.txt)
+
+# Basisu uses some variables in the public API, but does not export them
+# appropriately to allow for DLL linkage. There might be some way to work
+# around this, but for now let's just use basisu as a static library.
+add_library(basisu_lib STATIC ${BASISU_SRC_LIST})
+
+set_target_properties(basisu_lib PROPERTIES OUTPUT_NAME basisu)
+
+install(TARGETS basisu_lib)
+
+if(WIN32)
+  set_target_properties(basisu_lib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
+
+# Unless BASISU_NO_ITERATOR_DEBUG_LEVEL is defined, basisu Debug build setup uses
+# ITERATOR_DEBUG_LEVEL=1, which makes the object files incompatible with the rest
+# of our code, which is built with ITERATOR_DEBUG_LEVEL=2 used by VS by default.
+if(MSVC)
+  target_compile_definitions(basisu_lib PRIVATE -DBASISU_NO_ITERATOR_DEBUG_LEVEL)
+endif()
+
+file(GLOB ENCODER_HEADERS LIST_DIRECTORIES FALSE encoder/*.h encoder/*.inc)
+file(COPY ${ENCODER_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/encoder)
+
+file(GLOB ENCODER_HEADERS LIST_DIRECTORIES FALSE transcoder/*.h transcoder/*.inc)
+file(COPY ${ENCODER_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/transcoder)
+
+# clang-cl mimics MSVC quite closely overall but still there are some differences
+# we need to deal with.
+# With some SSE intrinsics, clang-cl demands you to specify the corresponding SSE
+# command line option explicitely, while MSVC does not care.
+if(MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND SSE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1")
+endif()

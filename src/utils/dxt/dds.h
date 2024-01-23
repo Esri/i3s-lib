@@ -17,14 +17,9 @@
 //--------------------------------------------------------------------------------------
 
 #pragma once
-#include "utl_dxt_config.h"
+#include "utils/dxt/utl_dxt_config.h"
+#include "utils/utl_platform_def.h"
 #include <stdint.h>
-
-#ifdef __GNUC__
-  #define SELECTANY __attribute__((weak))
-#else
-  #define SELECTANY __declspec(selectany)
-#endif
 
 namespace DirectX
 {

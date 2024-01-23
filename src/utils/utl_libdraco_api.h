@@ -19,6 +19,9 @@ email: contracts@esri.com
 
 #pragma once
 
+#include "i3s/i3s_common.h"
+#include "utils/utl_i3s_export.h"
+#include <cinttypes>
 
 namespace i3slib
 {
@@ -35,13 +38,16 @@ struct draco_i3s_mesh
   const float*          uv = nullptr;  //float2
   const unsigned char*  rgba = nullptr; //uchar4  
   const unsigned short* uv_region = nullptr; //ushort4
-  const unsigned int*   fid = nullptr;
+  const uint64_t*       fid = nullptr;
   const unsigned int*   fid_index = nullptr;
   int                   bits_pos = 20, bits_normal = 20, bits_uv = 20;
   double                pos_scale_x=1.0, pos_scale_y=1.0; //already applied to vertex positions.
+  uint32_t              anchor_point_count = 0;
+  const uint32_t*       anchor_point_fid_indices = nullptr;
+  const float*          anchor_points = nullptr; // float3
 }; 
 
-enum draco_attrib_type_t { Pos=0, Normal, Color, Uv, Region, Fid_index, Fid };
+enum draco_attrib_type_t { Pos=0, Normal, Color, Uv, Region, Fid_index, Fid, Anchor_point_fid_index, Anchor_points };
 typedef void* draco_mesh_handle_t;
 
 //! WARNING: returned pointer must be byte-aligned on value_stride;
@@ -49,8 +55,18 @@ typedef bool (*draco_create_mesh_attribute_t)(draco_mesh_handle_t hdl, draco_att
 
 typedef char* (*draco_create_buffer_t)( int size );
 
-bool draco_compress_mesh(const draco_i3s_mesh* src, draco_create_buffer_t alloc, char** dst, int* bytes, bool is_mesh);
-bool draco_decompress_mesh(const char* src, int src_bytes, draco_mesh_handle_t hdl, draco_create_mesh_attribute_t create_attrib_fct);
+I3S_EXPORT bool draco_compress_mesh(const draco_i3s_mesh* src, draco_create_buffer_t alloc, char** dst, int* bytes, Has_fids&, bool is_mesh);
+bool draco_decompress_mesh(const char* src, int src_bytes, draco_mesh_handle_t hdl, draco_create_mesh_attribute_t create_attrib_fct, Has_fids&);
+
+inline static bool fid_in_range(uint64_t fid)
+{
+  // At some point (in Pro and also in the JS API) the integral fids are cast to floating point doubles, so we use a range of fids s.t
+  // each individual fid in that range can be cast to a double and back to a uint64_t without changing its value.
+  //
+  // 2^53 is the limit according to: https://stackoverflow.com/questions/1848700/biggest-integer-that-can-be-stored-in-a-double
+
+  return fid < (1ull << 53ull);
+}
 
 } // namespace utl 
 

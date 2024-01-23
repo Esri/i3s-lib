@@ -1,4 +1,4 @@
-# Copyright 2020 Esri
+# Copyright 2020-2022 Esri
 # 
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 # this file except in compliance with the License. You may obtain a copy of
@@ -28,32 +28,40 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Please give us -std=c++17, not -std=gnu++17 or something
 
 option(NO_ETC2_SUPPORT "Disable ETC2 support.")
+option(NO_BASIS_ENCODER_SUPPORT "Disable Basis Universal encoder support.")
+option(NO_BASIS_TRANSCODER_SUPPORT "Disable Basis Universal transcoder support.")
 
 project(i3s)
 
 # Uncomment to see compilation commands with Linux builds
 #set(CMAKE_VERBOSE_MAKEFILE ON CACHE BOOL "Verbose build output" FORCE)
 
-set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/3rdparty) 
+set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/3rdparty)
 
 set(I3SLIB_SOURCES
+  src/i3s/i3s_attribute_buffer_encoder.cpp
   src/i3s/i3s_context_impl.cpp
   src/i3s/i3s_enums_generated.cpp
   src/i3s/i3s_layer_dom.cpp
   src/i3s/i3s_legacy_mesh.cpp
+  src/i3s/i3s_pages_breadthfirst.cpp
+  src/i3s/i3s_pages_localsubtree.cpp
   src/i3s/i3s_writer_impl.cpp
   src/utils/dxt/IntelDXTCompressor.cpp
-  src/utils/json/jsoncpp.cpp
+  src/utils/dxt/utl_dxt_mipmap_dds.cpp
   src/utils/utl_base64.cpp
   src/utils/utl_buffer.cpp
   src/utils/utl_bvh.cpp
   src/utils/utl_colors.cpp
-  src/utils/dxt/utl_dxt_mipmap_dds.cpp
+  src/utils/utl_datetime.cpp
+  src/utils/utl_envelope.cpp
   src/utils/utl_fs.cpp
   src/utils/utl_gzip.cpp
+  src/utils/utl_gzip_context.cpp
   src/utils/utl_image_2d.cpp
   src/utils/utl_image_resize.cpp
   src/utils/utl_jpeg.cpp
+  src/utils/utl_libbasis_api.cpp
   src/utils/utl_libdraco_api.cpp
   src/utils/utl_md5.cpp
   src/utils/utl_mime.cpp
@@ -63,8 +71,10 @@ set(I3SLIB_SOURCES
   src/utils/utl_resource_strings.cpp
   src/utils/utl_serialize_json.cpp
   src/utils/utl_serialize_json_dom.cpp
+  src/utils/utl_slpk_writer_factory.cpp
   src/utils/utl_slpk_writer_impl.cpp
   src/utils/utl_string.cpp
+  src/utils/utl_tree_partition.cpp
   src/utils/utl_variant.cpp
   src/utils/utl_zip_archive_impl.cpp)
 
@@ -92,6 +102,8 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(i3s PRIVATE -Wno-parentheses)
   # FIXME: we have too much of those, fix'em all and remove this
   target_compile_options(i3s PRIVATE -Wno-sign-compare)
+  # FIXME: there's some non-compliant code gcc won't tolerate
+  target_compile_options(i3s PRIVATE -fpermissive)
 endif()
 
 #target_compile_definitions(i3s PRIVATE -DI3S_EXPORT_API $<$<CONFIG:Release>:-DNDEBUG>)
@@ -100,11 +112,16 @@ target_include_directories(i3s PUBLIC include)
 
 target_include_directories(i3s PRIVATE
   src
-  ${THIRD_PARTY_DIR}/zlib/include
-  ${THIRD_PARTY_DIR}/libpng/include
-  ${THIRD_PARTY_DIR}/libjpeg/include
   ${THIRD_PARTY_DIR}/draco/include
-  ${THIRD_PARTY_DIR}/lepcc/include)
+  ${THIRD_PARTY_DIR}/lepcc/include
+  ${THIRD_PARTY_DIR}/libjpeg/include
+  ${THIRD_PARTY_DIR}/libpng/include
+  ${THIRD_PARTY_DIR}/rapidjson/include
+  ${THIRD_PARTY_DIR}/zlib/include)
+
+if(NOT NO_BASIS_ENCODER_SUPPORT OR NOT NO_BASIS_TRANSCODER_SUPPORT)
+  target_include_directories(i3s PRIVATE ${THIRD_PARTY_DIR}/basisu/include)
+endif()
 
 if(NOT WIN32)
   target_link_libraries(i3s stdc++fs)
@@ -113,25 +130,56 @@ endif()
 
 if(WIN32)
   add_library(zlib UNKNOWN IMPORTED)
-  set_target_properties(zlib PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/zlib/lib/x64/${CMAKE_BUILD_TYPE}/zlibd.lib)
-  set_target_properties(zlib PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/zlib/lib/x64/${CMAKE_BUILD_TYPE}/zlib.lib)
+  set_target_properties(zlib PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/zlib/lib/x64/Debug/zlibd.lib)
+  set_target_properties(zlib PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/zlib/lib/x64/Release/zlib.lib)
+  set_target_properties(zlib PROPERTIES
+    MAP_IMPORTED_CONFIG_MINSIZEREL Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
   
   add_library(libpng UNKNOWN IMPORTED)
-  set_target_properties(libpng PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/libpng/lib/x64/${CMAKE_BUILD_TYPE}/libpng16d.lib)
-  set_target_properties(libpng PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/libpng/lib/x64/${CMAKE_BUILD_TYPE}/libpng16.lib)
+  set_target_properties(libpng PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/libpng/lib/x64/Debug/libpng16d.lib)
+  set_target_properties(libpng PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/libpng/lib/x64/Release/libpng16.lib)
+  set_target_properties(libpng PROPERTIES
+    MAP_IMPORTED_CONFIG_MINSIZEREL Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
   
   add_library(libjpeg UNKNOWN IMPORTED)
-  set_target_properties(libjpeg PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/libjpeg/lib/x64/${CMAKE_BUILD_TYPE}/jpeg.lib)
+  set_target_properties(libjpeg PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/libjpeg/lib/x64/Debug/jpeg.lib)
+  set_target_properties(libjpeg PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/libjpeg/lib/x64/Release/jpeg.lib)
+  set_target_properties(libjpeg PROPERTIES
+    MAP_IMPORTED_CONFIG_MINSIZEREL Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
   
   add_library(draco UNKNOWN IMPORTED)
-  set_target_properties(draco PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/draco/lib/x64/${CMAKE_BUILD_TYPE}/draco.lib)
+  set_target_properties(draco PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/draco/lib/x64/Debug/draco.lib)
+  set_target_properties(draco PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/draco/lib/x64/Release/draco.lib)
+  set_target_properties(draco PROPERTIES
+    MAP_IMPORTED_CONFIG_MINSIZEREL Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
 
   add_library(lepcc UNKNOWN IMPORTED)
-  set_target_properties(lepcc PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/lepcc/lib/x64/${CMAKE_BUILD_TYPE}/lepcc.lib)
+  set_target_properties(lepcc PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/lepcc/lib/x64/Debug/lepcc.lib)
+  set_target_properties(lepcc PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/lepcc/lib/x64/Release/lepcc.lib)
+  set_target_properties(lepcc PROPERTIES
+    MAP_IMPORTED_CONFIG_MINSIZEREL Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
   
   if(NOT NO_ETC2_SUPPORT)
     add_library(EtcLib UNKNOWN IMPORTED)
-    set_target_properties(EtcLib PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/etc2comp/lib/x64/${CMAKE_BUILD_TYPE}/EtcLib.lib)
+    set_target_properties(EtcLib PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/etc2comp/lib/x64/Debug/EtcLib.lib)
+    set_target_properties(EtcLib PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/etc2comp/lib/x64/Release/EtcLib.lib)
+    set_target_properties(EtcLib PROPERTIES
+      MAP_IMPORTED_CONFIG_MINSIZEREL Release
+      MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
+  endif()
+
+  if(NOT NO_BASIS_ENCODER_SUPPORT OR NOT NO_BASIS_TRANSCODER_SUPPORT)
+    add_library(basisu UNKNOWN IMPORTED)
+    set_target_properties(basisu PROPERTIES IMPORTED_LOCATION_DEBUG ${THIRD_PARTY_DIR}/basisu/lib/x64/Debug/basisu.lib)
+    set_target_properties(basisu PROPERTIES IMPORTED_LOCATION_RELEASE ${THIRD_PARTY_DIR}/basisu/lib/x64/Release/basisu.lib)
+    set_target_properties(basisu PROPERTIES
+      MAP_IMPORTED_CONFIG_MINSIZEREL Release
+      MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
   endif()
 else()
   add_library(zlib SHARED IMPORTED)
@@ -151,12 +199,17 @@ else()
   set_target_properties(lepcc PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/lepcc/lib/x64/${CMAKE_BUILD_TYPE}/liblepcc.a)
   
   if(NOT NO_ETC2_SUPPORT)
-	  add_library(EtcLib SHARED IMPORTED)
-	  set_target_properties(EtcLib PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/etc2comp/lib/x64/${CMAKE_BUILD_TYPE}/libEtcLib.so)
+    add_library(EtcLib SHARED IMPORTED)
+    set_target_properties(EtcLib PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/etc2comp/lib/x64/${CMAKE_BUILD_TYPE}/libEtcLib.so)
+  endif()
+
+  if(NOT NO_BASIS_ENCODER_SUPPORT OR NOT NO_BASIS_TRANSCODER_SUPPORT)
+    add_library(basisu STATIC IMPORTED)
+    set_target_properties(basisu PROPERTIES IMPORTED_LOCATION ${THIRD_PARTY_DIR}/basisu/lib/x64/${CMAKE_BUILD_TYPE}/libbasisu.a)
   endif()
 endif()
 
-target_link_libraries(i3s zlib libpng libjpeg draco lepcc)
+target_link_libraries(i3s zlib libpng libjpeg draco lepcc basisu)
 if(NO_ETC2_SUPPORT)
   target_compile_definitions(i3s PRIVATE -DNO_ETC2_SUPPORT)
 else()

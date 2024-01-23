@@ -20,7 +20,7 @@ email: contracts@esri.com
 #include "pch.h"
 #include "utils/utl_md5.h"
 #include "utils/utl_i3s_assert.h"
-#include "utl_endian.h"
+#include "utils/utl_endian.h"
 #include <algorithm>
 #include <cstring>
 #include <stdint.h>
@@ -192,6 +192,35 @@ std::string Md5::to_string(const Digest& digest)
 
   I3S_ASSERT(hex.size() == 32);
   return hex;
+}
+
+bool from_hex(char h, unsigned char& out)
+{
+  char base = -1;
+  if (h >= '0' && h <= '9')
+    base = '0';
+  else if (h >= 'a' && h <= 'f')
+    base = 'a' - 10;
+  else if (h >= 'A' && h <= 'F')
+    base = 'A' - 10; 
+  out = h - base;
+  return base != -1;
+}
+
+//static
+bool Md5::from_string(const std::string& in, Md5::Digest& out)
+{
+  if (in.size() != 32)
+    return false;
+  out.fill(0);
+  unsigned char v;
+  for (uint32_t i = 0; i < 32; ++i)
+  {
+    if (!from_hex(in[i], v))
+      return false;
+    out[i>> 1u] |= v << ( (1-(i&1u)) << 2u);
+  }
+  return true;
 }
 
 // Initialize internal state

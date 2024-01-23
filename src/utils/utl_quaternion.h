@@ -42,13 +42,13 @@ Vec4<T> get_quaternion_from_axis_and_angle(const Vec3<T>& axis, T angle_in_radia
 }
 
 template<typename T>
-Vec4<T> quaternion_conjugate(const Vec4<T>& quaternion)
+constexpr Vec4<T> quaternion_conjugate(const Vec4<T>& quaternion)
 {
   return { -quaternion.x, -quaternion.y, -quaternion.z, quaternion.w };
 }
 
 template <typename T>
-Vec4<T> quaternion_product(const Vec4<T>& q1, const Vec4<T>& q2)
+constexpr Vec4<T> quaternion_product(const Vec4<T>& q1, const Vec4<T>& q2)
 {
   /*
   // I wonder whether this implementation is faster or more accurate.
@@ -66,7 +66,7 @@ Vec4<T> quaternion_product(const Vec4<T>& q1, const Vec4<T>& q2)
 }
 
 template <typename T>
-Vec3<T> rotate_vec3_by_quaternion(const Vec3<T>& v, const Vec4<T>& quaternion)
+constexpr Vec3<T> rotate_vec3_by_quaternion(const Vec3<T>& v, const Vec4<T>& quaternion)
 {
   // p' = q x p x q-1
   //
@@ -82,7 +82,7 @@ Vec3<T> rotate_vec3_by_quaternion(const Vec3<T>& v, const Vec4<T>& quaternion)
 }
 
 template <typename T>
-Vec3<T> rotate_vec3_by_quaternion_inverse(const Vec3<T>& v, const Vec4<T>& quaternion)
+constexpr Vec3<T> rotate_vec3_by_quaternion_inverse(const Vec3<T>& v, const Vec4<T>& quaternion)
 {
   const Vec3<T> u(quaternion);
   const auto s = quaternion.w;
@@ -94,7 +94,7 @@ namespace detail
 {
 
 template<typename T>
-void quaternion_axes_(const Vec4<T>& quaternion, T* x_axis, T* y_axis, T* z_axis)
+constexpr void quaternion_axes_(const Vec4<T>& quaternion, T* x_axis, T* y_axis, T* z_axis)
 {
   const auto x2 = quaternion.x + quaternion.x;
   const auto y2 = quaternion.y + quaternion.y;
@@ -125,7 +125,7 @@ void quaternion_axes_(const Vec4<T>& quaternion, T* x_axis, T* y_axis, T* z_axis
 }
 
 template <typename T>
-Mat4x4<T> quaternion_to_rotation_matrix(const Vec4<T>& quaternion)
+constexpr Mat4x4<T> quaternion_to_rotation_matrix(const Vec4<T>& quaternion)
 {
   Mat4x4<T> rot;
   detail::quaternion_axes_(quaternion, rot.m[0], rot.m[1], rot.m[2]);
@@ -142,7 +142,11 @@ Mat4x4<T> quaternion_to_rotation_matrix(const Vec4<T>& quaternion)
 }
 
 template<typename T>
-void quaternion_axes(const Vec4<T>& quaternion, Vec3<T>& x_axis, Vec3<T>& y_axis, Vec3<T>& z_axis)
+constexpr void quaternion_axes(
+  const Vec4<T>& quaternion,
+  Vec3<T>& x_axis,
+  Vec3<T>& y_axis,
+  Vec3<T>& z_axis)
 {
   detail::quaternion_axes_(quaternion, x_axis.begin(), y_axis.begin(), z_axis.begin());
 }

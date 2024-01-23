@@ -93,6 +93,8 @@ std::string     to_string(Image_format enc)
     case Image_format::Png: return "png";
     case Image_format::Ktx: return "ktx-etc2";
     case Image_format::Dds: return "dds";
+    case Image_format::Basis: return "basis";
+    case Image_format::Ktx2:  return "ktx2";
     default:
       I3S_ASSERT(false);
       return "";
@@ -101,9 +103,9 @@ std::string     to_string(Image_format enc)
 
 bool            from_string(const std::string& txt_utf8, Image_format* out)
 {
-  static const int c_count = 5;
-  static const char*  c_txt[c_count] = { "jpg", "png", "dds", "ktx", "ktx-etc2" };
-  static const Image_format c_val[c_count] = { Image_format::Jpg,Image_format::Png, Image_format::Dds, Image_format::Ktx, Image_format::Ktx };
+  static const int c_count = 7;
+  static const char*  c_txt[c_count] = { "jpg", "png", "dds", "ktx", "ktx-etc2", "basis", "ktx2" };
+  static const Image_format c_val[c_count] = { Image_format::Jpg,Image_format::Png, Image_format::Dds, Image_format::Ktx, Image_format::Ktx, Image_format::Basis, Image_format::Ktx2 };
   for (int i = 0; i < c_count; ++i)
   {
     if (strcmp(txt_utf8.c_str(), c_txt[i]) == 0)
@@ -208,11 +210,14 @@ bool validate_geometry_def(Layer_type layer_type, const Geometry_schema_desc& de
     }
   }
 
-  if (Version(1, 6) < ver && ver < Version(2, 0))
+  const bool has_geom_defs = Version(1, 6) < ver && layer_type != Layer_type::Point_cloud;   // layer.geometryDefinitions[]
+  if (has_geom_defs)
   {
     //Buffer 0 description must match:
     if( v17.size() <1 )
       return utl::log_error(trk, IDS_I3S_EXPECTS, std::string("length( layer.geometryDefinitions)"), 1, 0);
+
+    const bool has_legacy_geom = ver < Version(2, 0) && layer_type != Layer_type::Point;      // uncompressed geometry
     int loop = 0;
     for (auto& def : v17)
     {
@@ -220,14 +225,12 @@ bool validate_geometry_def(Layer_type layer_type, const Geometry_schema_desc& de
       if( def.geoms.size() < 1 )
         return utl::log_error(trk, IDS_I3S_EXPECTS, std::string("length(" + base+")"), 1, 0);
       
-      if (layer_type != Layer_type::Point)
+      if (has_legacy_geom)
       {
         for (int k = 0; k < def.geoms.size();++k)
         {
           base = "layer.geometryDefinitions[" + std::to_string(loop) + "].geometryBuffers[" + std::to_string(k) + "]";
           auto& bd = def.geoms[k];
-          if (bd.compressed.is_valid() && k != 1) // Compressed geometry buffer must be on index 1
-            return utl::log_error(trk, IDS_I3S_INVALID_COMPRESSED_GEOMETRY_INDEX,1 , k );
 
           if (!bd.compressed.is_valid() && k != 0) // Uncompressed geometry buffer must be on index 0
             return utl::log_error(trk, IDS_I3S_INVALID_UNCOMPRESSED_GEOMETRY_INDEX, 0, k);
@@ -292,7 +295,7 @@ bool validate_geometry_def(Layer_type layer_type, const Geometry_schema_desc& de
       }
       else
       {
-        // Point layer
+        // v2.0+ and PSL v1.7+
         // Compressed geometry buffer must be only buffer, at index 0
         if (def.geoms.size() != 1)
           return utl::log_error(trk, IDS_I3S_EXPECTS, std::string("length(" + base + ")"), 1, def.geoms.size());
@@ -372,7 +375,10 @@ bool validate_attrib_storage_info(const Attribute_storage_info_desc& desc, int i
           return utl::log_error(trk, IDS_I3S_EXPECTS, std::string(base + ".objectIds.valuesPerElement"), 1, desc.object_ids.values_per_element);
       }
       if (!is_integer(desc.object_ids.value_type))
-        return utl::log_error(trk, IDS_I3S_EXPECTS, std::string(base + ".objectIds.valueType"), std::string("INTEGER_TYPE"), to_string(desc.object_ids.value_type));
+      {
+        if (Version(1, 6) <= ver) // workaround for some v14 SLPK that can't be added to Pro or Runtime
+          return utl::log_error(trk, IDS_I3S_EXPECTS, std::string(base + ".objectIds.valueType"), std::string("INTEGER_TYPE"), to_string(desc.object_ids.value_type));
+      }
     }
     else
     {
@@ -418,11 +424,6 @@ bool validate_legacy_attribute_def(const std::vector< Field_desc>& fields, const
       return utl::log_error(trk, IDS_I3S_DUPLICATE_ATTRIBUTE_KEY, item.key);
     if (!attrib_by_name.emplace(item.name, &item).second)
       return utl::log_error(trk, IDS_I3S_DUPLICATE_ATTRIBUTE_NAME, item.name);
-    //check the stats:
-    if (std::find_if(stats.begin(), stats.end(), [&item](const Statistics_href_desc& d) { return d.key == item.key; }) == stats.end()
-        && !(item.ordering.size() && item.ordering[0] == Attrib_ordering::Object_ids))
-        utl::log_warning(trk, IDS_I3S_MISSING_ATTRIBUTE_STATS_DECL, item.name);
-
     ++loop;
   }
   loop = 0; 
@@ -455,7 +456,23 @@ bool validate_legacy_attribute_def(const std::vector< Field_desc>& fields, const
   //check fields:
   for (auto& fd : fields)
   {
-    if (attrib_by_name.find(fd.name) == attrib_by_name.end())
+    //check the stats:
+    if (auto attrb = attrib_by_name.find(fd.name); attrb != attrib_by_name.end())
+    {
+      auto& item = *(attrb->second);
+      bool has_stats_attrb = true; // no stats, skip warning, if false.
+      if (item.ordering.size())
+      {
+        bool is_attrb_values_type_oid = item.ordering[0] == Attrib_ordering::Attribute_values
+          && (item.attribute_values.value_type == Type::Oid32 || item.attribute_values.value_type == Type::Oid64);
+
+        has_stats_attrb = fd.type != Esri_field_type::Oid && item.ordering[0] != Attrib_ordering::Object_ids && !is_attrb_values_type_oid;
+      }
+      if (std::find_if(stats.begin(), stats.end(), [&item](const Statistics_href_desc& d) { return d.key == item.key; }) == stats.end()
+        && has_stats_attrb)
+        utl::log_warning(trk, IDS_I3S_MISSING_ATTRIBUTE_STATS_DECL, item.name);
+    }
+    else
       utl::log_warning(trk, IDS_I3S_MISSING_ATTRIBUTE_STORAGE_DECL, fd.name);
   }
   return true;
@@ -484,6 +501,14 @@ bool Version::parse(const std::string& v)
     return false;
   m_code = (major << 8) | minor;
   return true;
+}
+
+std::string to_string(const Version& ver)
+{
+  uint32_t code = ver.get_code();
+  uint32_t minor = code & 0x000000FF;
+  uint32_t major = code >> 8;
+  return std::to_string(major) + "." + std::to_string(minor);
 }
 
 std::string   Layer_desc::to_json() const

@@ -1,5 +1,5 @@
 /*
-Copyright 2020 Esri
+Copyright 2020 - 2023 Esri
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 this file except in compliance with the License. You may obtain a copy of
@@ -86,18 +86,22 @@ double screen_size_to_area(double pixels)
 
 i3slib::i3s::Layer_writer::Var create_writer(const stdfs::path& slpk_path)
 {
-  i3slib::i3s::Ctx_properties ctx_props;
+  i3slib::i3s::Ctx_properties ctx_props(i3slib::i3s::Max_major_versions({}));
   //i3slib::i3s::set_geom_compression(ctx_props.geom_encoding_support, i3slib::i3s::Geometry_compression::Draco, true);
   //i3slib::i3s::set_gpu_compression(ctx_props.gpu_tex_encoding_support, i3slib::i3s::GPU_texture_compression::ETC_2, true);
   auto writer_context = i3slib::i3s::create_i3s_writer_context(ctx_props);
 
   i3slib::i3s::Layer_meta meta;
   meta.type = i3slib::i3s::Layer_type::Mesh_IM;
-  meta.name = slpk_path.stem().u8string();
+  meta.name = i3slib::utl::to_string(slpk_path.stem().generic_u8string());
   meta.desc = "Generated with raster2slpk";
   meta.sr.wkid = 4326;
   meta.uid = meta.name;
   meta.normal_reference_frame = i3slib::i3s::Normal_reference_frame::Not_set;
+
+  // Temp hack to make the output SLPKs be exactly the same in different runs on the same input.
+  // TODO: add command line parameter for the timestamp?
+  meta.timestamp = 1;
 
   std::unique_ptr<i3slib::i3s::Layer_writer> writer(
     i3slib::i3s::create_mesh_layer_builder(writer_context, slpk_path));
@@ -195,6 +199,11 @@ bool load_elevation_data(const stdfs::path& path, int size, std::vector<double>&
   return true;
 }
 
+uint8_t avg4(uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4)
+{
+  return static_cast<uint8_t>((c1 + c2 + c3 + c4 + 2) / 4);
+}
+
 void build_downsampled_textures(int size, const char* data, int min_size, std::vector<std::vector<char>>& textures)
 {
   while(size > min_size)
@@ -206,15 +215,16 @@ void build_downsampled_textures(int size, const char* data, int min_size, std::v
     std::vector<char> texture;
     texture.reserve(s * s * 3);
 
-    const unsigned char *p = reinterpret_cast<const unsigned char*>(data);
+    const uint8_t *p = reinterpret_cast<const uint8_t*>(data);
     for (int y = 0; y < s; y++)
     {
       auto p1 = p + stride;
       for (int x = 0; x < s; x++, p += 6 , p1 += 6)
       {
-        texture.push_back(static_cast<char>(std::round((p[0] + p[3] + p1[0] + p1[3]) * 0.25)));
-        texture.push_back(static_cast<char>(std::round((p[1] + p[4] + p1[1] + p1[4]) * 0.25)));
-        texture.push_back(static_cast<char>(std::round((p[2] + p[5] + p1[2] + p1[5]) * 0.25)));
+        // Get average R,G,B values over 2 * 2 block of pixels.
+        texture.push_back(avg4(p[0], p[3], p1[0], p1[3]));
+        texture.push_back(avg4(p[1], p[4], p1[1], p1[4]));
+        texture.push_back(avg4(p[2], p[5], p1[2], p1[5]));
       }
       p = p1;
     }
@@ -294,10 +304,14 @@ void build_downsampled_grids(int size, const double* data, int min_size, std::ve
   }
 }
 
-//double get_elevation(const double* grid_data, int grid_size, int x, int y)
-//{
-//  return grid_data[y * (grid_size + 1) + x];
-//};
+Vec2f clamp_uv(const Vec2f& uv)
+{
+  return
+  {
+    std::clamp(uv.x, 0.01f, 0.99f),
+    std::clamp(uv.y, 0.01f, 0.99f)
+  };
+}
 
 void add_quad(
   std::vector<Vec3d>& verts,
@@ -318,12 +332,117 @@ void add_quad(
   verts.push_back(v3);
   verts.push_back(v0);
 
-  uvs.push_back(uv0);
-  uvs.push_back(uv1);
-  uvs.push_back(uv2);
-  uvs.push_back(uv2);
-  uvs.push_back(uv3);
-  uvs.push_back(uv0);
+  uvs.push_back(clamp_uv(uv0));
+  uvs.push_back(clamp_uv(uv1));
+  uvs.push_back(clamp_uv(uv2));
+  uvs.push_back(clamp_uv(uv2));
+  uvs.push_back(clamp_uv(uv3));
+  uvs.push_back(clamp_uv(uv0));
+}
+
+i3slib::utl::Rgb8 avg2(const i3slib::utl::Rgb8& rgb1, const i3slib::utl::Rgb8& rgb2)
+{
+  return i3slib::utl::Rgb8(
+    static_cast<unsigned char>((rgb1.x + rgb2.x) / 2),
+    static_cast<unsigned char>((rgb1.y + rgb2.y) / 2),
+    static_cast<unsigned char>((rgb1.z + rgb2.z) / 2));
+};
+
+i3slib::utl::Rgb8 avg4(
+  const i3slib::utl::Rgb8& rgb1,
+  const i3slib::utl::Rgb8& rgb2,
+  const i3slib::utl::Rgb8& rgb3,
+  const i3slib::utl::Rgb8& rgb4)
+{
+  return i3slib::utl::Rgb8(
+    avg4(rgb1.x, rgb2.x, rgb3.x, rgb4.x),
+    avg4(rgb1.y, rgb2.y, rgb3.y, rgb4.y),
+    avg4(rgb1.z, rgb2.z, rgb3.z, rgb4.z));
+};
+
+// Extracts a square fragment of given size at a given offset from a square texture.
+// Inputs: src_data is raw RGB, src_size, start and size are in pixels.
+// The output texture is PNG-compressed.
+bool extract_texture_fragment(
+  const char* src_data,
+  int src_size,
+  const Vec2i& start,
+  int size,
+  i3slib::i3s::Texture_buffer& texture_buffer)
+{
+  std::vector<char> texture(static_cast<size_t>(size) * size * 3);
+
+  const auto* src =
+    reinterpret_cast<const i3slib::utl::Rgb8*>(src_data) +
+    (start.y * src_size + start.x);
+
+  auto* dst = reinterpret_cast<i3slib::utl::Rgb8*>(texture.data());
+  const auto end = start + Vec2i(size, size);
+  size_t y = 0;
+
+  if (start.y > 0)
+  {
+    const auto prev_row = src - src_size;
+    for (size_t x = 0; x < size; x++)
+      dst[x] = avg2(src[x], prev_row[x]);
+
+    if (start.x > 0)
+      dst[0] = avg4(src[0], src[-1], prev_row[0], prev_row[-1]);
+
+    if (end.x < src_size)
+      dst[size - 1] = avg4(src[size - 1], src[size], prev_row[size - 1], prev_row[size]);
+
+    y = 1;
+    src += src_size;
+    dst += size;
+  }
+
+  const bool fix_last_row = end.y < src_size;
+  const size_t y_end = fix_last_row ? size - 1 : size;
+
+  for (; y < y_end; y++, src += src_size, dst += size)
+  {
+    std::copy(src, src + size, dst);
+
+    if (start.x > 0)
+      dst[0] = avg2(src[0], src[-1]);
+
+    if (end.x < src_size)
+      dst[size - 1] = avg2(src[size - 1], src[size]);
+  }
+
+  if (fix_last_row)
+  {
+    const auto next_row = src + src_size;
+    for (size_t x = 0; x < size; x++)
+      dst[x] = avg2(src[x], next_row[x]);
+
+    if (start.x > 0)
+      dst[0] = avg4(src[0], src[-1], next_row[0], next_row[-1]);
+
+    if (end.x < src_size)
+      dst[size - 1] = avg4(src[size - 1], src[size], next_row[size - 1], next_row[size]);
+  }
+
+  // Encode to PNG.
+  std::vector<uint8_t> png_bytes;
+  if (!i3slib::utl::encode_png(
+        reinterpret_cast<uint8_t*>(texture.data()), size, size, false, png_bytes))
+    return false;
+
+  texture_buffer.meta.alpha_status = i3slib::i3s::Texture_meta::Alpha_status::Opaque;
+  texture_buffer.meta.wrap_mode = i3slib::i3s::Texture_meta::Wrap_mode::None;
+  texture_buffer.meta.is_atlas = false;
+  texture_buffer.meta.mip0_width = size;
+  texture_buffer.meta.mip0_height = size;
+  texture_buffer.meta.mip_count = 1; //no mip
+  texture_buffer.meta.format = i3slib::i3s::Image_format::Png;
+
+  texture_buffer.data = i3slib::utl::Buffer::create_deep_copy<char>(
+    reinterpret_cast<const char*>(png_bytes.data()),
+    static_cast<int>(png_bytes.size()));
+
+  return true;
 }
 
 // Extracts the fragment of the elevation grid starting at _start_ and spanning _size_ cells 
@@ -455,20 +574,14 @@ bool build_mesh(
 
   if (transformation)
     transformation->transform(verts.data(), verts.size());
-
-  std::vector<char> texture(static_cast<size_t>(texture_size) * texture_size * 3);
-  const auto bytes_per_row = texture_size * 3;
-  const auto stride = color_size * 3;
-  auto row = color_data + (texture_start.y * color_size + texture_start.x) * 3;
-  auto rgb_out = texture.data();
-  for (size_t y = 0; y < texture_size; y++, row += stride)
-    rgb_out = std::copy(row, row + bytes_per_row, rgb_out);
-
+  
   i3slib::i3s::Simple_raw_mesh raw_mesh;
   raw_mesh.vertex_count = static_cast<int>(verts.size());
   raw_mesh.abs_xyz = verts.data();
   raw_mesh.uv = uvs.data();
-  if (!i3slib::i3s::create_texture_from_image(texture_size, texture_size, 3, texture.data(), raw_mesh.img))
+
+  if (!extract_texture_fragment(
+        color_data, color_size, texture_start, texture_size, raw_mesh.img))
     return false;
 
   return writer.create_mesh_from_raw(raw_mesh, mesh) == IDS_I3S_OK;

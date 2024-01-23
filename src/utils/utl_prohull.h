@@ -87,10 +87,24 @@ namespace utl
 
   public:
     enum class Method :int  { Minimal_diameter=0, Minimal_surface_area=1, Minimal_volume=2 };
-    explicit Pro_hull(const Pro_set* proset);
+    explicit Pro_hull(const Pro_set* proset = Pro_set::get_default());
+    // calculate convexoid OBB for a set of points. 
+    void get_ball_box(const std::vector<Vec3d>& points
+      , Obb_abs& obb, double& radius, Method method = Pro_hull::Method::Minimal_surface_area)
+    { 
+      return get_ball_box(points.data(), (int)points.size(), obb, radius, method); 
+    }    
+    void get_ball_box(const Vec3d* points, int count
+      , Obb_abs& obb, double& radius, Method method = Pro_hull::Method::Minimal_surface_area);
+
+  private:
+    friend class Bvh_builder;
+    friend class Hierarchy;
+
     Pro_hull(const Pro_set* proset, const Vec3d& vector);
 
     //----------------------------------------------------------------------------------------------------------
+    void clear();
 
     double center(int dir) const;      // middle value of projection for a direction
     double extent(int dir) const;      // size of projection for a direction
@@ -110,8 +124,6 @@ namespace utl
 
     void get_bounding_sphere(Vec3d& center, double& radius) const;   // calculate a bounding sphere 
     void get_bounding_box(Obb_abs& obb, Method method= Method::Minimal_diameter) const;      // calc a best circumscribed obb
-    void get_ball_box(const std::vector<Vec3d>& points, Obb_abs& obb, double& radius, Method method) { return get_ball_box(points.data(), (int)points.size(), obb, radius, method); }
-    void get_ball_box(const Vec3d* points, int count, Obb_abs& obb, double& radius, Method method);    // calculate convexoid OBB for set of points
 
     //accessor for debug:
     const Pro_set&          get_base() const { return *m_base; }

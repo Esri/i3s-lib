@@ -72,7 +72,11 @@ protected:
 template<typename... Args>
 bool log_error(Basic_tracker* tracker, int code, Args&&... args)
 {
+#if defined(__EMSCRIPTEN__) && defined(_DEBUG)
+  printf("log_error CRITICAL code=%d\n", code);
+#else
   return Basic_tracker::log(tracker, Log_level::Critical, code, std::forward<Args>(args)...);
+#endif
 }
 
 template<typename... Args>
@@ -92,6 +96,8 @@ bool log_debug(Basic_tracker* tracker, int code, Args&&... args)
 {
   return Basic_tracker::log(tracker, Log_level::Debug, code, std::forward<Args>(args)...);
 }
+
+I3S_EXPORT Basic_tracker* create_basic_logger_utf16(std::wostream* out, Log_level minimal_log_level = Log_level::Debug);
 
 } // namespace utl
 

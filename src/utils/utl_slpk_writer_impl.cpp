@@ -24,6 +24,7 @@ email: contracts@esri.com
 #include "utils/utl_fs.h"
 #include "utils/utl_crc32.h"
 #include "utils/utl_io.h"
+#include "utils/utl_slpk_writer_factory.h"
 #include <stdint.h>
 #include <vector>
 #include <fstream>
@@ -37,6 +38,79 @@ namespace utl
 
 namespace detail
 {
+
+
+//-----------------------------------------------------------------------
+// Free  functions
+//-----------------------------------------------------------------------
+
+//! stream-to-stream copy using a temp buffer
+template< class Output_stream_t >
+static bool  copy_stream(std::istream* src, Output_stream_t* dest, uint64_t n_bytes)
+{
+  std::vector< char > buff(1024 * 1024);
+  while (n_bytes > 0 && src->good() && dest->good())
+  {
+    auto n = std::min((uint64_t)buff.size(), n_bytes);
+    src->read(buff.data(), n);
+    dest->write(buff.data(), n);
+    n_bytes -= n;
+  }
+  return !src->fail() && dest->good() && !dest->fail();
+}
+
+//-----------------------------------------------------------------------
+// class Scoped_temp_folder
+//-----------------------------------------------------------------------
+
+class Scoped_temp_folder
+{
+public:
+  Scoped_temp_folder() {}
+  ~Scoped_temp_folder()
+  {
+    _delete_all();
+  }
+  Scoped_temp_folder& operator=(const Scoped_temp_folder&) = delete;
+  Scoped_temp_folder(const Scoped_temp_folder&) = delete;
+  void clear() { _delete_all(); }
+  bool create(std::filesystem::path prefix)
+  {
+    _delete_all();
+    m_path = create_temporary_folder_path(prefix);
+    return !m_path.empty();
+  }
+  const std::filesystem::path& get_path() const { return m_path; }
+  void _delete_all()
+  {
+    if (m_path.empty())
+      return;
+    std::error_code ec;
+    stdfs::remove_all(m_path, ec);
+    m_path.clear();
+    I3S_ASSERT(!ec);
+  }
+  operator bool() const { return !m_path.empty(); }
+private:
+  std::filesystem::path m_path;
+};
+
+//-----------------------------------------------------------------------
+// class Output_stream_std
+//-----------------------------------------------------------------------
+class  Output_stream_std : public Output_stream
+{
+public:
+  DECL_PTR(Output_stream);
+  Output_stream_std(std::filesystem::path path, std::ios_base::openmode mode) : m_ofs(path, mode) {}
+  virtual int64_t  tellp() override { return m_ofs.tellp(); }
+  virtual void     close() noexcept override { return m_ofs.close(); }
+  virtual bool     fail() const override { return m_ofs.fail(); }
+  virtual bool     good() const override { return m_ofs.good(); }
+  virtual Output_stream& write(const char* raw_bytes, std::streamsize count) override { m_ofs.write(raw_bytes, count); return *this; }
+private:
+  std::ofstream m_ofs;
+};
 //-----------------------------------------------------------------------
 // class        Slpk_writer_index
 //-----------------------------------------------------------------------
@@ -46,9 +120,9 @@ struct Sanity_state
 {
   static const int64_t c_magic = 0x77665533;
   int64_t magic = c_magic;
-  int64_t slpk_pending_size=0;
-  int64_t cd_pending_size=0;
-  int64_t entry_count=0;
+  int64_t slpk_pending_size = 0;
+  int64_t cd_pending_size = 0;
+  int64_t entry_count = 0;
 };
 
 //! Helper class that store the index. Part of the index may on on disk if archive is unfinalized. 
@@ -56,7 +130,7 @@ class Slpk_writer_index
 {
 public:
   typedef int64_t Locator;
-  bool    init(const std::filesystem::path& path = {});
+  bool    init_index(const std::filesystem::path& path = {});
   bool    load(const std::filesystem::path& index_path, int64_t slpk_pending_size, int64_t cd_pending_size);
   int64_t   get_count() const { return m_state.entry_count + m_pending.size(); }
   void    add(const Md5::Digest& h, int64_t offset);
@@ -76,7 +150,7 @@ private:
 };
 
 
-bool Slpk_writer_index::init(const std::filesystem::path& path)
+bool Slpk_writer_index::init_index(const std::filesystem::path& path)
 {
   m_pending.clear();
   m_state = Sanity_state();
@@ -90,7 +164,7 @@ bool Slpk_writer_index::init(const std::filesystem::path& path)
   return m_stored.good();
 }
 
-int64_t Slpk_writer_index::find_file( std::string* path_in_archive)
+int64_t Slpk_writer_index::find_file(std::string* path_in_archive)
 {
   if (!_load_to_sysmem() || m_pending.empty())
     return -1;
@@ -115,12 +189,12 @@ bool Slpk_writer_index::load(const std::filesystem::path& index_path, int64_t sl
   //open stream:
   m_stored = std::fstream(index_path, std::ios::binary | std::ios::out | std::ios::in);
   // read the sanity state and compare:
-  m_stored.seekg(-(int64_t)sizeof(Sanity_state), std::ios::end );
+  m_stored.seekg(-(int64_t)sizeof(Sanity_state), std::ios::end);
   read_it(&m_stored, &m_state);
   if (m_stored.fail() || m_state.cd_pending_size != cd_pending_size || m_state.slpk_pending_size != slpk_pending_size
-      || m_state.c_magic != Sanity_state::c_magic)
+    || m_state.magic != Sanity_state::c_magic)
   {
-    init();
+    init_index();
     return false;
   }
   m_stored.seekg(-(int64_t)sizeof(Sanity_state), std::ios::end);
@@ -158,11 +232,16 @@ bool Slpk_writer_index::save(int64_t slpk_pending_size, int64_t cd_pending_size)
 
 void Slpk_writer_index::destroy()
 {
-  //delete artifact on disk if any.
-  m_stored.close();
-  std::error_code whatnow;
-  stdfs::remove(m_index_path, whatnow);
-  init();
+  if (!m_index_path.empty())
+  {
+    //delete artifact on disk if any.
+    m_stored.close();
+    std::error_code whatnow;
+    stdfs::remove(m_index_path, whatnow);
+    init_index();
+  }
+  //else
+  //  I3S_ASSERT(!m_stored.is_open() && m_pending.empty() && m_is_sorted == false);
 }
 
 bool Slpk_writer_index::_load_to_sysmem()
@@ -187,7 +266,7 @@ bool Slpk_writer_index::_load_to_sysmem()
     std::sort(m_pending.begin(), m_pending.end()); //may take a while...
 
     //check for collision:
-    for (size_t i = 1; i < m_pending.size(); ++i)
+    for (size_t i = 1, sz = m_pending.size(); i < sz; ++i)
     {
       if (!(m_pending[i - 1] < m_pending[i]))
       {
@@ -216,6 +295,7 @@ bool Slpk_writer_index::finalize_index(const char** ptr, int64_t* size)
   return true;
 }
 
+
 //-----------------------------------------------------------------------
 // class        Slpk_writer_impl
 //-----------------------------------------------------------------------
@@ -227,7 +307,7 @@ bool Slpk_writer_index::finalize_index(const char** ptr, int64_t* size)
 //! - files added to archive are small. ( < few MB )
 //! - file paths in archive are ascii.
 //! this class is  thread-safe .
-class Slpk_writer_impl : public Slpk_writer
+class Slpk_writer_impl final : public Slpk_writer
 {
 public:
   DECL_PTR(Slpk_writer_impl);
@@ -235,21 +315,36 @@ public:
   ~Slpk_writer_impl() override;
   // --- Slpk_writer: ---
   virtual bool    create_archive(const std::filesystem::path& path, Create_flags flags) override;
+  virtual bool    create_stream(Output_stream::ptr strm) override;
   virtual bool    append_file(const std::string& path_in_archive, const char* buffer, int n_bytes, Mime_type type, Mime_encoding pack) override;
+#if 0 // deprecated TBD
   virtual bool    get_file(const std::string& path_in_archive, std::string* content) override;
+#endif
   virtual bool    finalize()  override { Lock_guard lk(m_mutex); return _finalize_no_lock(); }
+  virtual bool    cancel() noexcept override { Lock_guard lk(m_mutex); return _cancel_no_lock(); }
+  virtual bool    close_unfinalized() noexcept override { Lock_guard lk(m_mutex); return _close_unfinalized_no_lock(); }
 private:
+  [[ nodiscard ]]
   bool    _is_io_fail();
-  bool    _append_file_no_lock(const std::string& path_in_archive, const char* buffer, int n_bytes);
-  void    _init() { m_path.clear(); m_ar = std::fstream(); m_tmp = std::fstream(); m_index.init(); m_flags = Create_flag::Overwrite_if_exists_and_auto_finalize; }
-  bool    _finalize_no_lock()  ;
+  // returns an offset to the file in archive.
+  [[ nodiscard ]]
+  uint64_t _append_file_no_lock(std::string && clean_path_in_archive, const char* buffer, size_t n_bytes, const uint32_t crc)noexcept;
+
+  void    _init() { m_path.clear(); m_ar = nullptr; m_tmp = std::fstream(); m_index.init_index(); m_flags = Create_flag::Overwrite_if_exists_and_cancel_in_destructor; }
+  bool    _finalize_no_lock() noexcept;
+  bool    _cancel_no_lock() noexcept;
+  bool    _close_unfinalized_no_lock() noexcept;
+  bool    _create_archive_no_lock(const std::filesystem::path& path, Create_flags flags, Output_stream::ptr strm);
 
   std::filesystem::path     m_path; //Path of the SLPK as provided by caller
-  std::fstream              m_ar;
+  //std::fstream              m_ar;
+  Output_stream::ptr        m_ar;
   std::fstream              m_tmp;
   mutable Slpk_writer_index m_index;
   mutable std::mutex        m_mutex;
-  Create_flags              m_flags = Create_flag::Overwrite_if_exists_and_auto_finalize;
+  Create_flags              m_flags = Create_flag::Overwrite_if_exists_and_cancel_in_destructor;
+  // must be last member:
+  Scoped_temp_folder        m_temp_folder_for_stream_artifacts; // not use for regular filesystem slpk archives.
 };
 
 
@@ -258,44 +353,39 @@ Slpk_writer_impl::Slpk_writer_impl()
 {}
 
 Slpk_writer_impl::~Slpk_writer_impl()
-{ 
-  
+{
   Lock_guard lk(m_mutex);
-  if (!m_path.empty())
+  if (m_path.empty())
+    return;
+
+  if (m_flags & Create_flag::On_destruction_keep_unfinalized_to_reopen)
   {
-    if (m_flags & Create_flag::Disable_auto_finalize)
-    {
-      //need to save the index:
-      if (!m_index.save(m_ar.tellp(), m_tmp.tellp()))
-      {
-        // uh-oh...
-        m_index.destroy();
-      }
-    }
-    else
-      _finalize_no_lock();
+    _close_unfinalized_no_lock();
   }
+  else
+    _cancel_no_lock();
 }
 
+#if 0 //deprecated TBD
 bool Slpk_writer_impl::get_file(const std::string& path_in_archive, std::string* content)
 {
   Lock_guard lk(m_mutex);
   bool is_found = false;
   auto actual_path = path_in_archive;
-  int64_t offset = m_index.find_file( &actual_path);
+  int64_t offset = m_index.find_file(&actual_path);
   if (offset >= 0)
   {
-    m_ar.flush();
+    m_ar->flush();
     // read header::
     detail::Local_file_hdr hdr;
     uint64_t actual_packed_size = 0;
-    if (hdr.read(&m_ar, offset, actual_path, &actual_packed_size) && (hdr.packed_size == hdr.unpacked_size))
+    if (hdr.read(&m_ar, offset, &actual_packed_size, &actual_path) && (hdr.packed_size == hdr.unpacked_size))
     {
       //read content:
       content->resize((size_t)actual_packed_size);
-      m_ar.read(content->data(), content->size());
-      if (!m_ar.fail())
-      {    
+      m_ar->read(content->data(), content->size());
+      if (!m_ar->fail())
+      {
         //check CRC:
         auto actual_crc = ~crc32_buf(content->data(), content->size());
         is_found = actual_crc == hdr.crc32 || hdr.crc32 == 0;
@@ -303,13 +393,33 @@ bool Slpk_writer_impl::get_file(const std::string& path_in_archive, std::string*
     }
   }
   //back to the end of the file, ready to append
-  m_ar.seekp(0, std::ios::end);
+  m_ar->seekp(0, std::ios::end);
   return is_found;
 }
+#endif
 
 bool  Slpk_writer_impl::_is_io_fail()
 {
-  return !m_ar.good() || m_ar.fail() || !m_tmp.good() || m_tmp.fail();
+  if (!m_ar)
+  {
+    I3S_ASSERT(m_ar);
+    return false;
+  }
+  return !m_ar->good() || m_ar->fail() || !m_tmp.good() || m_tmp.fail();
+}
+
+bool Slpk_writer_impl::create_stream(Output_stream::ptr strm)
+{
+  Lock_guard lk(m_mutex);
+  // reset:
+  _init();
+
+  if (!m_temp_folder_for_stream_artifacts.create("slpk_writer"))
+    return false;
+
+  auto path = m_temp_folder_for_stream_artifacts.get_path() / "placeholder.slpk";
+
+  return _create_archive_no_lock(path, Create_flag::Overwrite_if_exists_and_cancel_in_destructor, strm);
 }
 
 bool  Slpk_writer_impl::create_archive(const std::filesystem::path& path, Create_flags flags)
@@ -317,6 +427,14 @@ bool  Slpk_writer_impl::create_archive(const std::filesystem::path& path, Create
   Lock_guard lk(m_mutex);
   // reset:
   _init();
+  m_temp_folder_for_stream_artifacts.clear();
+
+  return _create_archive_no_lock(path, flags, nullptr);
+}
+
+bool  Slpk_writer_impl::_create_archive_no_lock(const std::filesystem::path& path, Create_flags flags, Output_stream::ptr strm)
+{
+
   m_flags = flags;
   m_path = path;
 
@@ -332,10 +450,12 @@ bool  Slpk_writer_impl::create_archive(const std::filesystem::path& path, Create
 
   if (flags & Create_flag::Unfinalized_only)
   {
+    I3S_ASSERT(!strm);
     //look for an "unfinalized" SLPK:
-    m_ar = std::fstream(slpk_path, std::ios::binary | std::ios::out | std::ios::in |std::ios::ate);
+    //m_ar = std::ofstream(slpk_path, std::ios::binary | std::ios::out | std::ios::in |std::ios::ate);
+    m_ar = std::make_shared< Output_stream_std>(slpk_path, std::ios::binary | std::ios::out | std::ios::ate | std::ios::app);
     m_tmp = std::fstream(tmp_cd_path, std::ios::binary | std::ios::out | std::ios::in | std::ios::ate);
-    if (_is_io_fail() || !m_index.load(tmp_index_path, m_ar.tellp(), m_tmp.tellp()))
+    if (_is_io_fail() || !m_index.load(tmp_index_path, m_ar->tellp(), m_tmp.tellp()))
     {
       _init();
       return false;
@@ -355,18 +475,22 @@ bool  Slpk_writer_impl::create_archive(const std::filesystem::path& path, Create
       }
     }
 
-    m_ar = std::fstream(slpk_path,    std::ios::binary | std::ios::out | std::ios::in | std::ios::trunc);
+    //m_ar = std::fstream(slpk_path,    std::ios::binary | std::ios::out | std::ios::in | std::ios::trunc);
+    if (strm)
+      m_ar = strm;
+    else
+      m_ar = std::make_shared< Output_stream_std>(slpk_path, std::ios::binary | std::ios::out | std::ios::trunc);
     m_tmp = std::fstream(tmp_cd_path, std::ios::binary | std::ios::out | std::ios::in | std::ios::trunc);
     if (file_exists(tmp_index_path))
     {
       stdfs::remove(tmp_index_path, err_code);
-      if(err_code)
+      if (err_code)
       {
         _init();
         return false;
       }
     }
-    if (_is_io_fail() || ( ( m_flags & Create_flag::Disable_auto_finalize ) &&  !m_index.init(tmp_index_path) ))
+    if (_is_io_fail() || ((m_flags & Create_flag::On_destruction_keep_unfinalized_to_reopen) && !m_index.init_index(tmp_index_path)))
     {
       _init();
       return false;
@@ -380,47 +504,118 @@ bool  Slpk_writer_impl::create_archive(const std::filesystem::path& path, Create
 //! File extension will be added if type and/or pack are provided.
 bool  Slpk_writer_impl::append_file(const std::string& path_in_archive_, const char* buffer, int n_bytes, Mime_type type, Mime_encoding pack)
 {
+  if (path_in_archive_.empty() || n_bytes <= 0 || !buffer)
+  {
+    return false;
+  }
+  std::string path_in_archive = path_in_archive_;
+  add_slpk_extension_to_path(&path_in_archive, type, pack);
+  const auto path_hash = detail::hash_path(&path_in_archive);
+  const uint32_t crc = ~crc32_buf(buffer, n_bytes);
+
   Lock_guard lk(m_mutex);
-  if (m_path.empty() || path_in_archive_.empty())
+  if (m_path.empty())
   {
     return false; //try to append to an already finalized file ?
   }
-  auto path_with_ext = path_in_archive_;
-  add_slpk_extension_to_path(&path_with_ext, type, pack);
-  return _append_file_no_lock(path_with_ext, buffer, n_bytes);
-}
-
-bool  Slpk_writer_impl::_append_file_no_lock(const std::string& file_path_raw, const char* buffer, int n_bytes)
-{
-  auto path_in_archive = file_path_raw;
-  const auto path_hash = detail::hash_path(&path_in_archive);
-
-  if (n_bytes <= 0 || !buffer)
-    return false;
-  //write to archive file:
-  uint64_t offset = m_ar.tellp();
-  //fill in the header:
-  uint32_t crc = ~crc32_buf(buffer, n_bytes);
-  detail::Local_file_hdr loc_hdr(n_bytes, crc, (uint16_t)path_in_archive.size());
-  write_it(&m_ar, loc_hdr);
-  m_ar.write(path_in_archive.data(), path_in_archive.size());
-  //write the data:
-  m_ar.write(buffer, n_bytes);
-  //fill in the CD record:
-  detail::Cd_hdr cd_hdr;
-  cd_hdr.offset = offset;
-  cd_hdr.path = path_in_archive;
-  cd_hdr.raw = detail::Cd_hdr_raw(loc_hdr, offset);
-  cd_hdr.write(&m_tmp);
-
+  auto offset = _append_file_no_lock(std::move(path_in_archive), buffer, n_bytes, crc);
   if (_is_io_fail())
     return false;
-
   m_index.add(path_hash, offset);
   return true;
 }
 
-bool Slpk_writer_impl::_finalize_no_lock()
+uint64_t Slpk_writer_impl::_append_file_no_lock(
+  std::string && clean_file_path_in_archive, const char* buffer, size_t n_bytes, const uint32_t crc) noexcept
+{
+  I3S_ASSERT(n_bytes > 0 && buffer);
+  //write to archive file:
+  uint64_t offset = m_ar->tellp();
+  //fill in the header:
+  detail::Local_file_hdr loc_hdr(n_bytes, crc, (uint16_t)clean_file_path_in_archive.size());
+  write_it(m_ar.get(), loc_hdr);
+  //fill in the file name
+  m_ar->write(clean_file_path_in_archive.data(), clean_file_path_in_archive.size());
+  // write extra info
+  if (loc_hdr.packed_size == detail::c_ones_32)
+  {
+    auto extra = detail::Extra_field_64bit_file_size(n_bytes);
+    write_it(m_ar.get(), extra);
+  }
+  //write the data:
+  m_ar->write(buffer, n_bytes);
+  //fill in the CD record:
+  detail::Cd_hdr cd_hdr;
+  cd_hdr.offset = offset;
+  cd_hdr.size64 = n_bytes;
+  cd_hdr.path = std::move(clean_file_path_in_archive);
+  cd_hdr.raw = detail::Cd_hdr_raw(loc_hdr, n_bytes, offset);
+  cd_hdr.write(&m_tmp);
+  return offset;
+}
+
+bool Slpk_writer_impl::_cancel_no_lock()noexcept
+{
+  if (m_path.empty())
+    return true;
+  m_index.destroy();
+
+  if(m_tmp.is_open())
+    m_tmp.close();
+  auto tmp_file_path = m_path;
+  tmp_file_path += I3S_T(".tmp");
+  bool is_deleted = utl::remove_file(tmp_file_path);
+  I3S_ASSERT(is_deleted);
+
+  if (m_ar)
+  {
+    m_ar->close();
+    m_ar = nullptr;
+  }
+  auto pending_file_path = m_path;
+  pending_file_path += I3S_T(".pending");
+  is_deleted = utl::remove_file(pending_file_path);
+  I3S_ASSERT(is_deleted);
+
+  if (m_temp_folder_for_stream_artifacts)
+    m_temp_folder_for_stream_artifacts.clear();
+  _init();
+  return true;
+}
+
+bool Slpk_writer_impl::_close_unfinalized_no_lock() noexcept
+{
+  if (m_path.empty())
+    return false;
+  try
+  {
+    if (!m_index.save(m_ar->tellp(), m_tmp.tellp()))
+    {
+      // uh-oh... 
+      m_index.destroy();
+      return false;
+    }
+  }
+  catch (const std::ios_base::failure&)
+  {
+    // uh-oh...last hope call
+    try {
+      m_index.destroy();
+    }
+    catch (const std::ios_base::failure&)
+    {
+      I3S_ASSERT(false);
+      return false;
+    }
+  }
+  m_tmp.close();
+  m_ar->close();
+  auto res = !_is_io_fail();
+  _init();
+  return res;
+}
+
+bool Slpk_writer_impl::_finalize_no_lock()noexcept
 {
   bool is_ok = false;
   if (!m_path.empty())
@@ -428,59 +623,180 @@ bool Slpk_writer_impl::_finalize_no_lock()
     const char* src_ptr;
     int64_t size;
     m_index.finalize_index(&src_ptr, &size);
-    //if (!_append_file_no_lock(detail::c_hash_table_file_name, reinterpret_cast<const char*>(m_index.data()), (int)(m_index.size() * sizeof(Hashed_offset))))
-    if (_append_file_no_lock(detail::c_hash_table_file_name, src_ptr, (int)size))
     {
+      const uint32_t crc = ~crc32_buf(src_ptr, static_cast<size_t>(size));
+      [[maybe_unused]]
+      auto offset = _append_file_no_lock(detail::c_hash_table_file_name, src_ptr, static_cast<size_t>(size), crc);
+    }
+    if (!_is_io_fail())
+    {
+      auto total_file_count = m_index.get_count() + 1; // "+1" is for index itself that is not in the index
 
-      uint64_t offset_to_cd = m_ar.tellp();
+      uint64_t offset_to_cd = m_ar->tellp();
       uint64_t cd_size = m_tmp.tellp();
       m_tmp.flush();
       m_tmp.seekg(0);
       //copy the tmp CD to the ZIP archive:
-      if (copy_stream(&m_tmp, &m_ar, cd_size))
+      if (copy_stream(&m_tmp, m_ar.get(), cd_size))
       {
         //add [zip64 end of central directory record]
-        uint64_t offset_to_eocd64 = m_ar.tellp();
-        detail::End_of_cd_64 eocd64(m_index.get_count(), cd_size, offset_to_cd);
-        write_it(&m_ar, eocd64);
+        uint64_t offset_to_eocd64 = m_ar->tellp();
+        detail::End_of_cd_64 eocd64(total_file_count, cd_size, offset_to_cd);
+        write_it(m_ar.get(), eocd64);
         //[zip64 end of central directory locator]
         detail::End_of_cd_locator_64 the_end_64(offset_to_eocd64);
-        write_it(&m_ar, the_end_64);
+        write_it(m_ar.get(), the_end_64);
         //[end of central directory record]
-        detail::End_of_cd_legacy the_end(m_index.get_count(), cd_size, offset_to_cd);
-        write_it(&m_ar, the_end);
-        //bool ret = m_ar.good() && !m_ar.fail();
-        m_tmp.close();
-        std::error_code err_code;
+        detail::End_of_cd_legacy the_end(total_file_count, cd_size, offset_to_cd);
+        write_it(m_ar.get(), the_end);
+        if (m_ar->good() && !m_ar->fail())
+        {
+          m_tmp.close();
+          std::error_code err_code;
 
-        auto tmp_file_path = m_path;
-        tmp_file_path += I3S_T(".tmp");
-        stdfs::remove(tmp_file_path);
+          auto tmp_file_path = m_path;
+          tmp_file_path += I3S_T(".tmp");
+          {
+            [[maybe_unused]]
+            auto is_deleted = utl::remove_file(tmp_file_path);
+            I3S_ASSERT(is_deleted);
+          }
 
-        auto pending_file_path = m_path;
-        pending_file_path += I3S_T(".pending");
+          auto pending_file_path = m_path;
+          pending_file_path += I3S_T(".pending");
 
-        m_index.destroy();
-        //rename:
-        m_ar.close();
-        err_code = {};
-        stdfs::rename(pending_file_path, m_path, err_code);
-        is_ok = !err_code;
+          m_index.destroy();
+          //rename:
+          m_ar->close();
+          m_ar = nullptr;
+          if (!m_temp_folder_for_stream_artifacts)
+          {
+            // if **not** in user-provided stream mode, rename the final SLPK:
+            err_code = {};
+            stdfs::rename(pending_file_path, m_path, err_code);
+            is_ok = !err_code;
+          }
+          else
+            is_ok = true;
+        }
         m_path.clear();
       }
     }
   }
-  _init();
+  if (!is_ok)
+    _cancel_no_lock();
+  else
+    _init();
   return is_ok;
 }
 
+
+class Extracted_slpk_writer final : public Slpk_writer
+{
+public:
+  Extracted_slpk_writer() = default;
+  ~Extracted_slpk_writer(); // N.B.: by default removes all files and subdirectories in the destination folder
+  // --- Abstract_i3s_writer ---
+  virtual bool    create_archive(const std::filesystem::path& path, Create_flags flags = Overwrite_if_exists_and_cancel_in_destructor) override;
+#if 0
+  virtual bool    get_file(const std::string& archivePath, std::string* content) override { return false; }
+#endif
+  virtual bool    append_file(const std::string& archivePath, const char* buffer, int nBytes, Mime_type type = Mime_type::Not_set, Mime_encoding pack = Mime_encoding::Not_set) override;
+  virtual bool    finalize() override { m_dest.clear();  return true; }
+  virtual bool    cancel() noexcept override ; // clears the destination folder
+  virtual bool    close_unfinalized() noexcept override  { m_dest.clear();  return true; }
+private:
+  stdfs::path m_dest;
+  Create_flags m_openning_flags = Overwrite_if_exists_and_cancel_in_destructor;
+};
+
+Extracted_slpk_writer::~Extracted_slpk_writer()
+{
+  if (m_dest.empty())
+    return;
+  if (m_openning_flags & Unfinalized_only)
+    close_unfinalized();
+  cancel();
 }
+
+bool Extracted_slpk_writer::create_archive(const std::filesystem::path& path, Create_flags flags)
+{
+  if (flags & Unfinalized_only)
+  {
+    if (!folder_exists(m_dest))
+      return false;
+  }
+  else
+  {
+    // if destination exists, it must be empty.
+    // directories will be created when extracting.
+    std::error_code e;
+    if (folder_exists(m_dest) && (!std::filesystem::is_empty(m_dest, e) || e))
+      return false;
+  }
+  m_dest = path;
+  m_openning_flags = flags;
+  return true;
+}
+
+bool Extracted_slpk_writer::append_file(const std::string& archivePath, const char* buffer, int nBytes, Mime_type type, Mime_encoding pack)
+{
+  const auto path_out = m_dest / archivePath;        // nodes/0/textures/0.jpg
+  const auto dir = std::filesystem::path(path_out).parent_path(); // nodes/0/textures
+  // check directory exists. Create if it doesn't.
+  if (!folder_exists(dir))
+  {
+    // if create_directory fails, check if it's because directory already exsists (created in another thread)
+    if (!create_directory_recursively(dir) && !folder_exists(dir))
+      return false;
+  }
+  // append the file
+  return write_file(path_out, buffer, nBytes);
+}
+
+bool Extracted_slpk_writer::cancel() noexcept
+{
+  if (m_dest.empty())
+    return true;
+  m_dest.clear();
+  std::error_code ec;
+  stdfs::remove_all(m_dest, ec);
+  return !ec;
+}
+
+}
+Output_stream* create_output_stream_std(std::filesystem::path path, std::ios_base::openmode mode)
+{
+  return new detail::Output_stream_std(path, mode);
+}
+
 }//endof ::utl::detail
 
 
-utl::Slpk_writer* utl::create_slpk_writer()
+utl::Slpk_writer* utl::create_file_slpk_writer(const std::filesystem::path& dst_path)
 {
-  return new  detail::Slpk_writer_impl();
+  if (dst_path.extension() == ".eslpk")
+    return new detail::Extracted_slpk_writer(); // extracted slpk
+  else
+    return new detail::Slpk_writer_impl();    // slpk
+}
+
+utl::Slpk_writer* utl::create_slpk_writer(const std::string& dst_path)
+{
+  using namespace std::string_view_literals;
+  const auto pos = dst_path.find("://"sv);
+
+  // If no :// marker is found in the url_or_path, we assume this is a filesystem
+  // path, which we designate with empty scheme tag.
+  const auto scheme = pos == std::string::npos ?
+    std::string{} :
+    utl::to_lower(dst_path.substr(0, pos));
+
+  const auto slpk_writer_factory = utl::Slpk_writer_factory::get(scheme);
+  if (!slpk_writer_factory)
+    return nullptr; // unknown URI scheme
+
+  return slpk_writer_factory->create_writer(dst_path);
 }
 
 } // namespace i3slib

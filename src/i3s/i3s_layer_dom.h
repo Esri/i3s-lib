@@ -19,9 +19,11 @@ email: contracts@esri.com
 
 #pragma once
 #include "utils/utl_serialize_json_dom.h"
-#include "utils/utl_spatial_reference.h"
 #include "i3s/i3s_material_dom.h"
 #include "i3s/i3s_mesh_dom.h"
+#include "i3s/i3s_common_dom.h"
+#include "i3s/i3s_writer.h"
+
 #include <stdint.h>
 
 namespace i3slib
@@ -69,24 +71,74 @@ struct Elevation_info
   }
 };
 
+struct Domain_coded_value
+{
+  // --- fields:
+  std::string name;
+  utl::Variant code;
+  // --- serialization:
+  SERIALIZABLE(Domain_coded_value);
+  friend bool operator==(const Domain_coded_value& a, const Domain_coded_value& b)
+  {
+    return a.name == b.name && a.code == b.code;
+  }
+
+  template< class Ar > void serialize(Ar& ar)
+  {
+    ar & utl::nvp("name", name); //required
+    ar & utl::nvp("code", code); //required
+  }
+
+};
+
+struct Domain_desc
+{
+  // --- fields:
+  Domain_type type{ Domain_type::Not_set };
+  std::string name;
+  std::string description;
+  Esri_field_type field_type{ Esri_field_type::Not_set };
+  utl::Vec2d range; // range[0] - minimum, range[1] - maximum
+  std::vector<Domain_coded_value> coded_values;
+
+  // --- serialization:
+  SERIALIZABLE(Domain_desc);
+  friend bool operator==(const Domain_desc& a, const Domain_desc& b)
+  {
+    return a.type == b.type && a.name == b.name && a.description == b.description &&
+      a.field_type == b.field_type && a.range == b.range &&
+      a.coded_values == b.coded_values;
+  }
+
+  template< class Ar > void serialize(Ar& ar)
+  {
+    ar & utl::nvp("type", utl::enum_str(type)); //required
+    ar & utl::nvp("name", name); //required 
+    ar & utl::opt("description", description, std::string());
+    ar & utl::opt("fieldType", utl::enum_str(field_type), Esri_field_type::Not_set); //optional
+    ar & utl::opt("range", utl::seq(range)); // optional
+    ar & utl::opt("codedValues", utl::seq(coded_values)); // optional
+  }
+};
+
 struct Field_desc
 {
   // --- fields:
   std::string name;
   Esri_field_type type{ Esri_field_type::Not_set };
   std::string alias;
+  Domain_desc domain;
   // --- serialization:
   SERIALIZABLE(Field_desc);
-  friend bool operator==(const Field_desc& a, const Field_desc& b) { return a.name == b.name && a.type == b.type && a.alias == b.alias; }
+  friend bool operator==(const Field_desc& a, const Field_desc& b) { return a.name == b.name && a.type == b.type && a.alias == b.alias && a.domain == b.domain; }
   template< class Ar > void serialize(Ar& ar)
   {
     ar & utl::nvp("name", name); //required
     ar & utl::nvp("type", utl::enum_str(type)); //required
     ar & utl::opt("alias", alias, std::string()); //required ?
+    ar & utl::opt("domain", domain, Domain_desc()); // optional
   }
 };
-
-
 
 struct Typed_array_desc
 {
@@ -94,14 +146,29 @@ struct Typed_array_desc
   Type       value_type{ Type::Not_set };
   int             values_per_element{ 0 };
   Value_encoding  encoding = Value_encoding::Not_set;
+  Time_encoding   time_encoding = Time_encoding::Not_set;
+  Key_value_encoding   kv_encoding{};
   // --- serialization:
   SERIALIZABLE(Typed_array_desc);
-  friend bool operator==(const Typed_array_desc& a, const Typed_array_desc& b) { return a.value_type == b.value_type && a.encoding == b.encoding && a.values_per_element == b.values_per_element; }
+  friend bool operator==(const Typed_array_desc& a, const Typed_array_desc& b) { return a.value_type == b.value_type && a.encoding == b.encoding
+    && a.values_per_element == b.values_per_element && a.time_encoding == b.time_encoding && a.kv_encoding == b.kv_encoding; }
   template< class Ar > void serialize(Ar& ar)
   {
     ar & utl::nvp("valueType", utl::enum_str(value_type)); 
     ar & utl::nvp("valuesPerElement", values_per_element);
-    ar & utl::opt("encoding", encoding, Value_encoding::Not_set);
+    ar & utl::opt("encoding", encoding, Value_encoding::Not_set); // optional
+
+    // In case of new key value encoding formats. Avoid breaking older clients.
+    ar.push_suppressed_error_mask((utl::Json_parse_error::Error_flags_t)utl::Json_parse_error::Error::Unknown_enum);
+    ar& utl::opt("keyValueEncoding", kv_encoding, Key_value_encoding{}); // optional
+    if (ar.pop_suppressed_error_mask())
+      kv_encoding = Key_value_encoding{};
+
+    // In case of new time encoding formats. Avoid breaking older clients.
+    ar.push_suppressed_error_mask((utl::Json_parse_error::Error_flags_t)utl::Json_parse_error::Error::Unknown_enum);
+    ar & utl::opt("timeEncoding", time_encoding, Time_encoding::Not_set); // optional
+    if (ar.pop_suppressed_error_mask())
+      time_encoding = Time_encoding::Not_set;
   }
 };
 
@@ -341,14 +408,14 @@ struct Store_desc
   std::string lod_type;
   std::string lod_model;
   std::string version;
-  int  index_page_size=1;
+  uint32_t  index_page_size=1;
   Geometry_schema_desc geometry_schema;
   double z_factor_internal=1.0;
   // --- fields (PCSL specific):
   Pcsl_paged_index_desc     pcsl_paged_index_desc;
 
   //--- default:
-  Store_desc() : profile("points"), resource_pattern({ "3dNodeIndexDocument", "Attributes", "featureData" }), root_node("./nodes/root"), attribute_encoding("application/octet-stream; version=1.7")
+  Store_desc() : profile("points"), resource_pattern({ "3dNodeIndexDocument", "Attributes", "featureData" }), root_node("./nodes/root")
     , lod_type("AutoThinning"), lod_model("node-switching") {}
   // --- serialization:
   SERIALIZABLE(Store_desc);
@@ -365,7 +432,7 @@ struct Store_desc
     ar & utl::opt("zFactor", z_factor_internal, 1.0);
     ar & utl::opt("nidEncoding", nid_encoding, std::string());
     //some SLPKs write out normalReferenceFrame: "null"
-    ar.push_suppressed_error_mask((utl::Json_exception::Error_flags_t)utl::Json_exception::Error::Unknown_enum);
+    ar.push_suppressed_error_mask((utl::Json_parse_error::Error_flags_t)utl::Json_parse_error::Error::Unknown_enum);
     ar & utl::opt("normalReferenceFrame", utl::enum_str(normal_reference_frame), Normal_reference_frame::Not_set);
     if (ar.pop_suppressed_error_mask())
       normal_reference_frame = Normal_reference_frame::Not_set;
@@ -385,8 +452,8 @@ struct Store_desc
 struct Node_pages_desc
 {
   // --- fields:
-  int             nodes_per_page=1;
-  int             root_index=0;
+  uint32_t        nodes_per_page=1;
+  uint32_t        root_index=0;
   Lod_metric_type lod_metric_type = Lod_metric_type::Max_screen_size; //TODO: reduce to v2 supported  enums (ideally ONE!)
   // --- serialization:
   friend bool operator==(const Node_pages_desc& a, const Node_pages_desc& b) { return a.nodes_per_page == b.nodes_per_page && a.lod_metric_type== b.lod_metric_type; }
@@ -452,6 +519,7 @@ struct Texture_definition_desc
   bool is_atlas = false;
   //Texture_sampler_desc  sampler; //NO sampler support yet.
   //Texture_binding binding= Texture_binding::Per_node;
+  Texture_semantic sem; // to differentiate different textures with same format
   // --- serialization:
   friend bool operator==(const Texture_definition_desc& a, const Texture_definition_desc& b) 
   {
@@ -466,6 +534,43 @@ struct Texture_definition_desc
   }
 };
 
+#if 1
+using Full_extent = Full_extent_desc;
+#else
+
+// BSL: v1.7
+// IM, 3DO, Point: v1.8
+struct Full_extent
+{
+  // -- fields:
+  i3s::Spatial_reference_desc spatial_ref;
+  double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0, zmin = 0.0, zmax = 0.0;
+  friend bool operator==(const Full_extent& a, const Full_extent& b)
+  {
+    return a.spatial_ref == b.spatial_ref
+      && a.xmin == b.xmin && a.xmax == b.xmax && a.ymin == b.ymin && a.ymax == b.ymax && a.zmin == b.zmin && a.zmax == b.zmax;
+  }
+  // --- 
+  SERIALIZABLE(Full_extent);
+  template< class Ar > void serialize(Ar& ar)
+  {
+    ar& utl::opt("spatialReference", spatial_ref, i3s::Spatial_reference_desc());
+    ar& utl::nvp("xmin", xmin);
+    ar& utl::nvp("xmax", xmax);
+    ar& utl::nvp("ymin", ymin);
+    ar& utl::nvp("ymax", ymax);
+    ar& utl::nvp("zmin", zmin);
+    ar& utl::nvp("zmax", zmax);
+  };
+};
+#endif
+
+
+I3S_EXPORT Full_extent to_full_extent(
+  const Spatial_reference_xform& xform,
+  const utl::Obb_abs& dst_obb);
+
+
 //! 3DSceneLayer.json (including v17 fields) 
 struct Layer_desc
 {
@@ -476,11 +581,15 @@ struct Layer_desc
   std::string href;
   std::string copyright;
   Layer_type  layer_type =Layer_type::_count;
-  geo::SR_def spatial_ref;
+  Priority priority = c_default_priority;
+  Semantic semantic = c_default_semantic;
+  Full_extent full_extent;
+  //i3s::Spatial_reference_desc spatial_ref;
+  Spatial_reference_desc spatial_ref;
   std::string alias;
   std::string description;
   Last_update_desc time_stamp;
-  std::vector< std::string > capabilities;
+  std::vector< Capability > capabilities{Capability::View, Capability::Query};
   //Elevation_info elevation_info;
   bool        disable_popup = false;
   Store_desc  store;
@@ -502,7 +611,7 @@ struct Layer_desc
   //Attribute_set_definition_desc  attrib_def;
   std::vector< Attribute_buffer_desc > attrib_defs;
   // --helper api:
-  int     get_nodes_per_page() const { return store.index_page_size; }
+  uint32_t     get_nodes_per_page() const { return store.index_page_size; }
   I3S_EXPORT std::string   to_json() const;
   // ---- defaults:
   //Layer_desc() : id(0), href("./layers/0"), layer_type("Point"), capabilities({ "View", "Query" }), disable_popup(false) {}
@@ -511,16 +620,25 @@ struct Layer_desc
   SERIALIZABLE(Layer_desc);
   template< class Ar > void serialize(Ar& ar)
   {
-    static const   geo::SR_def c_sr_wgs84 = { 4326, 4326, -1,-1,std::string() };
+    static const Spatial_reference_desc c_sr_wgs84 = { 4326, 4326, -1,-1,std::string() };
     ar & utl::nvp("id", id); // won't publish otherwise.
-    I3S_ASSERT(id >= 0);
+    I3S_ASSERT(id >= 0 || dynamic_cast<i3slib::utl::Archive_in*>(&ar) == nullptr || dynamic_cast<i3slib::utl::Archive_in*>(&ar)->has_parse_error());
     ar & utl::opt("version", version, std::string());
     ar & utl::opt("name", name, std::string());
     ar & utl::opt("href", href, std::string());
     ar & utl::nvp("layerType", utl::enum_str(layer_type)); //required
+    ar & utl::opt("fullExtent", full_extent, Full_extent()); // required if version 1.8
     ar & utl::opt("spatialReference", spatial_ref, c_sr_wgs84, utl::Serialize_field_mode::Optional_always_write); //not required, assumes wgs84 ( see indexCRS, vertexCRS)
     ar & utl::opt("alias", alias, std::string());
-    ar & utl::opt("description", description, std::string());
+
+    if (layer_type == Layer_type::Point_cloud)
+      ar& utl::opt("desc", description, std::string());
+    else
+      ar & utl::opt("description", description, std::string());
+
+    ar& utl::opt("priority", priority, c_default_priority);
+    ar& utl::opt("semantic", semantic, c_default_semantic);
+
     ar & utl::opt("copyrightText", copyright, std::string());
     ar & utl::opt("serviceUpdateTimeStamp", time_stamp, Last_update_desc());
     ar & utl::nvp("capabilities", utl::seq(capabilities)); //required
@@ -548,7 +666,7 @@ struct Layer_desc
     ar & utl::opt("elevationInfo", elevation_info, utl::Unparsed_field());
 
     // mesh v.1.7:
-    ar & utl::opt("nodePages", node_pages, Node_pages_desc());
+    ar & utl::opt((layer_type != Layer_type::Point ? "nodePages" : "pointNodePages"), node_pages, Node_pages_desc()); // must rename nodePages for PSL to maintain backwards compatilibity
     ar & utl::opt("materialDefinitions", utl::seq(material_defs));
     ar & utl::opt("textureSetDefinitions", utl::seq(tex_defs));
     ar & utl::opt("geometryDefinitions", utl::seq(geom_defs)); //required if 1.7 version
@@ -575,28 +693,9 @@ struct Service_desc
 
 };
 
-struct Full_extent
-{
-  // -- fields:
-  geo::SR_def spatial_ref;
-  double xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0, zmin = 0.0, zmax = 0.0;
-  // --- 
-  SERIALIZABLE(Full_extent);
-  template< class Ar > void serialize(Ar& ar)
-  {
-    ar & utl::opt("spatialReference", spatial_ref, geo::SR_def());
-    ar & utl::nvp("xmin", xmin);
-    ar & utl::nvp("xmax", xmax);
-    ar & utl::nvp("ymin", ymin);
-    ar & utl::nvp("ymax", ymax);
-    ar & utl::nvp("zmin", zmin);
-    ar & utl::nvp("zmax", zmax);
-  };
-};
 
 struct Bsl_sublayer_desc
 {
-  // --- fields:
   // --- fields:
   int id;
   std::string name;
@@ -605,11 +704,12 @@ struct Bsl_sublayer_desc
   std::string model_name;
   Layer_type layer_type;
   bool    visibility=true;
+  bool    is_empty = false;
   std::vector< Bsl_sublayer_desc > sublayers;
   // --- 
   friend bool operator==(const Bsl_sublayer_desc& a, const Bsl_sublayer_desc& b) {
     return a.id == b.id && a.name == b.name && a.discipline == b.discipline && a.model_name == b.model_name && a.layer_type == b.layer_type
-      && a.visibility == b.visibility && a.sublayers == b.sublayers;
+      && a.visibility == b.visibility && a.sublayers == b.sublayers && a.is_empty == b.is_empty;
   }
   SERIALIZABLE(Bsl_sublayer_desc);
   template< class Ar > void serialize(Ar& ar)
@@ -620,8 +720,13 @@ struct Bsl_sublayer_desc
     ar & utl::opt("discipline", discipline, std::string());
     ar & utl::opt("modelName", model_name, std::string());
     ar & utl::nvp("layerType", utl::enum_str(layer_type));
-    ar & utl::opt("visibility", visibility, true);
-    ar & utl::opt("sublayers", utl::seq(sublayers), std::vector< Bsl_sublayer_desc >());
+    // Pro 2.6 has a bug where it expects the optional true defaulting visibility flag to exist. So we must write it.
+    ar & utl::opt("visibility", visibility, true, utl::Serialize_field_mode::Optional_always_write);
+    ar & utl::opt("isEmpty", is_empty, false, utl::Serialize_field_mode::Optional_always_write);
+    // Cannot add BSL slpk to Pro when 'sublayers' property for a 'group' sublayer is missing. Always write for group sublayers.
+    const auto sublayer_field_mode = layer_type == Layer_type::Group ? 
+      utl::Serialize_field_mode::Optional_always_write : utl::Serialize_field_mode::Optional_skip_if_default;
+    ar & utl::opt("sublayers", utl::seq(sublayers), std::vector< Bsl_sublayer_desc >(), sublayer_field_mode);
   }
 };
 
@@ -724,7 +829,15 @@ struct Bsl_filter_desc
   std::string description;
   std::vector< Bsl_filter_block_desc > filter_blocks;
   Bsl_filter_authoring_desc filter_authoring_info;
- 
+  // Indicates if a filter is the default filter. Clients use the default filter to show the current state of a building. 
+  // For example, if 'created' is the default filter, all elements in the 'created' phases are drawn, while elements in the 'demolished' phases are invisible. 
+  // The default filter is not shown in the UI and does not have Authoring Info. 
+  // (Can build specific UI for this filter)
+  bool is_default{ false };
+  //Defines if a filter is visible within the client application. Used to exclude filters that are overwritten 
+  //from a group of filters shown in the client application
+  bool is_visible{ true };
+
   // --- 
   friend bool operator==(const Bsl_filter_desc& a, const Bsl_filter_desc& b)
   {
@@ -738,6 +851,8 @@ struct Bsl_filter_desc
     ar& utl::nvp("description", description);
     ar& utl::nvp("filterBlocks", utl::seq(filter_blocks));
     ar& utl::opt("filterAuthoringInfo", filter_authoring_info, Bsl_filter_authoring_desc());
+    ar& utl::opt("isDefaultFilter", is_default, false);
+    ar& utl::opt("isVisible", is_visible, true);
   }
 };
 
@@ -752,10 +867,11 @@ struct Bsl_layer_desc
   std::string description;
   std::string copyright;
   Full_extent extent;
-  geo::SR_def spatial_ref;
+  Spatial_reference_desc spatial_reference;
   Height_model_info_desc height_model_info;
   std::string active_filter_id;
   std::string stats_href;
+  std::vector< Capability > capabilities;
   std::vector< Bsl_sublayer_desc > sublayers;
   std::vector< Bsl_filter_desc > filters;
   // ---
@@ -770,10 +886,12 @@ struct Bsl_layer_desc
     ar & utl::nvp("layerType", layer_type);
     ar & utl::opt("description", description, std::string());
     ar & utl::opt("copyright", copyright, std::string());
-    ar & utl::nvp("spatialReference", spatial_ref);
+    ar & utl::nvp("fullExtent", extent);
+    ar & utl::nvp("spatialReference", spatial_reference);
     ar & utl::opt("heightModelInfo", height_model_info, Height_model_info_desc());
     ar & utl::opt("activeFilterId", active_filter_id, std::string());
     ar & utl::opt("statisticsHRef", stats_href, std::string());
+    ar & utl::opt("capabilities", utl::seq(capabilities), std::vector<Capability>());
     ar & utl::nvp("sublayers", utl::seq(sublayers));
     ar& utl::opt("filters", utl::seq(filters), std::vector< Bsl_filter_desc >());
   }
@@ -783,6 +901,7 @@ struct Bsl_layer_desc
 
 struct I3S_EXPORT Version
 {
+  static constexpr uint32_t c_max_min_version = (1u << 8u) - 1u;
   Version() = default;
   Version(int major, int minor) : m_code((major << 8) | minor) {}
   uint32_t get_code() const { return m_code; }
@@ -797,6 +916,8 @@ struct I3S_EXPORT Version
 private:
   uint32_t m_code{ 0 };
 };
+I3S_EXPORT std::string to_string(const Version& ver);
+
 I3S_EXPORT bool validate_geometry_def(Layer_type layer_type, const Geometry_schema_desc& desc, Version ver, const std::vector< Geometry_definition_desc>& v17def, utl::Basic_tracker* trk);
 //bool validate_attrib_storage_info(const Attribute_storage_info_desc& desc, int index, Version version, const std::vector<Attribute_buffer_desc>& v17, utl::Basic_tracker* trk);
 I3S_EXPORT bool check_resource_path_equal(const std::string& what, const std::string& expected);

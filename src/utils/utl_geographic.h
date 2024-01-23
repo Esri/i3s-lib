@@ -28,9 +28,10 @@ namespace utl
 {
 
 //! assumed size of the earth sphere:
-static const double c_wgs84_equatorial_radius = 6378137.0; //semi-major 
-static const double c_wgs84_polar_radius      = 6356752.314245; //semi-minor
-static const double c_wgs84_eccentricity      = 0.08181919092890624;
+static constexpr double c_wgs84_equatorial_radius = 6378137.0; //semi-major 
+static constexpr double c_wgs84_polar_radius      = 6356752.314245; //semi-minor
+static constexpr double c_wgs84_eccentricity      = 0.08181919092890624;
+static constexpr double c_max_coordinate_epsg3857 = 20037508.34;
 // assume x: lon=la=0, y = east and z = north
 
 void  geocentric2cartesian(const Vec3d& llz, Vec3d* xyz) noexcept;
@@ -146,7 +147,7 @@ inline void  ECEF2geodetic( const Vec3d& xyz, Vec3d* llz ) noexcept
   double n = a / sqrt(1.0 - (e2 * sinLat * sinLat));
 
   llz->z = (p / cos(lat)) - n;
-  double const c_180_div_pi = 180.0 / 3.14159265359;
+  double const c_180_div_pi = 180.0 / c_pi;
   llz->y = lat * c_180_div_pi;
   llz->x = lon * c_180_div_pi;
 }

@@ -48,13 +48,13 @@ struct Rgba8
   Rgba8(uint32_t _r, uint32_t _g, uint32_t _b, uint32_t _a = 255) : r((uint8_t)_r), g((uint8_t)_g), b((uint8_t)_b), a((uint8_t)_a) {}
   explicit Rgba8(uint32_t v) { memcpy(this, &v, sizeof(uint32_t)); }
   explicit Rgba8(Rgb8 v, uint8_t alpha=255) { memcpy(this, &v, sizeof(uint32_t)); a = alpha; }
-  Rgba8&    operator=(const Rgb8& src) noexcept { memcpy(this, &src, 3); a = 255; return *this; }
+  Rgba8&    operator=(const Rgb8& src) noexcept { memmove(this, &src, 3); a = 255; return *this; }
   template< class T > explicit Rgba8(const Vec4<T>& v) : r((uint8_t)clamp(v.x,(T)0, (T)255)), g((uint8_t)clamp(v.y, (T)0, (T)255)), b((uint8_t)clamp(v.z, (T)0, (T)255)), a((uint8_t)clamp(v.w, (T)0, (T)255)) {}
   Rgba8              operator+(const Rgba8& v) { return Rgba8(clamp_sum(r, v.r), clamp_sum(g, v.g), clamp_sum(b, v.b), clamp_sum(a, v.a)); }
   friend Rgba8       operator*(const Rgba8& c, float v)           { return Rgba8(clamp_mul(c.r, v), clamp_mul(c.g, v), clamp_mul(c.b, v), clamp_mul(c.a, v)); }
-  constexpr int       size() const noexcept { return 4; }
-  uint8_t              operator[](size_t i) const noexcept { I3S_ASSERT(i >= 0 && i < 4); return *(&r + i); }
-  uint8_t&             operator[](size_t i)  noexcept      { I3S_ASSERT(i >= 0 && i < 4); return *(&r + i); }
+  constexpr int      size() const noexcept { return 4; }
+  uint8_t            operator[](size_t i) const noexcept { I3S_ASSERT(i >= 0 && i < 4); return *(&r + i); }
+  uint8_t&           operator[](size_t i)  noexcept      { I3S_ASSERT(i >= 0 && i < 4); return *(&r + i); }
   Rgba8              mixed(const Rgba8& w, float v) {
     return Rgba8(
       (uint8_t)clamp(lerp((float)r, (float)w.r, v), 0.0f, 255.0f),
@@ -84,7 +84,6 @@ I3S_EXPORT Rgba8 from_color4f(const Vec4f& v);
 I3S_EXPORT Vec4f lod_to_color4f(int lod);
 
 
-
 struct Alpha_stop
 {
   Alpha_stop() = default;
@@ -97,12 +96,10 @@ struct Alpha_stop
   SERIALIZABLE(Alpha_stop);
   template< class Ar >  void serialize(Ar& ar)
   {
-    ar& utl::nvp("position", position);
     ar& utl::nvp("alpha", alpha);
+    ar& utl::nvp("position", position);
   }
-
 };
-
 
 struct Color_stop
 {
@@ -116,8 +113,8 @@ struct Color_stop
   SERIALIZABLE(Color_stop);
   template< class Ar >  void serialize(Ar& ar)
   {
-    ar& utl::nvp("position", position);
     ar& utl::nvp("color", utl::seq((utl::Vec4< uint8_t >&)color));
+    ar& utl::nvp("position", position);
   }
 };
 

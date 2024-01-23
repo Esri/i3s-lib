@@ -31,9 +31,6 @@
     <Filter Include="Source Files\utils\dxt">
       <UniqueIdentifier>{2f916ff2-883b-4f34-8a6e-26f7e193e7d6}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\utils\json">
-      <UniqueIdentifier>{efc4817e-8bfe-4125-b8bc-8b1974a62e51}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\i3s\i3s_common.h">
@@ -74,12 +71,6 @@
     </ClInclude>
     <ClInclude Include="..\src\i3s\i3s_writer_impl.h">
       <Filter>Source Files\i3s</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\utils\json\json.h">
-      <Filter>Source Files\utils\json</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\utils\json\json-forwards.h">
-      <Filter>Source Files\utils\json</Filter>
     </ClInclude>
     <ClInclude Include="..\src\utils\win\utl_windows.h">
       <Filter>Source Files\utils\win</Filter>
@@ -144,9 +135,6 @@
     <ClInclude Include="..\src\utils\utl_bitstream.h">
       <Filter>Source Files\utils</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\utils\utl_box.h">
-      <Filter>Source Files\utils</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\utils\utl_bvh.h">
       <Filter>Source Files\utils</Filter>
     </ClInclude>
@@ -195,26 +183,83 @@
     <ClInclude Include="..\src\utils\utl_quaternion.h">
       <Filter>Source Files\utils</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\utils\utl_serialize.h">
-      <Filter>Source Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\utils\utl_serialize_json.h">
-      <Filter>Source Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\utils\utl_serialize_json_dom.h">
-      <Filter>Source Files\utils</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\utils\utl_slpk_writer_api.h">
-      <Filter>Source Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\utils\utl_spatial_reference.h">
-      <Filter>Source Files\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\utils\utl_variant.h">
       <Filter>Source Files\utils</Filter>
     </ClInclude>
     <ClInclude Include="..\src\utils\utl_zip_archive_impl.h">
       <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_libbasis_api.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\i3s\i3s_common_dom.h">
+      <Filter>Header Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_enum_flag_op.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_gzip.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_tree_partition.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_tiny_set.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_pages_breadthfirst.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_pages_localsubtree.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_pages.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_envelope.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\i3s\i3s_attribute_buffer_encoder.h">
+      <Filter>Source Files\i3s</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_stats.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_stats_types.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\utils\utl_slpk_writer_factory.h">
+      <Filter>Source Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_box.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_datetime.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_gzip_context.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_serialize.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_serialize_json.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_serialize_json_dom.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_shared_objects.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_static_vector.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\utils\utl_variant.h">
+      <Filter>Header Files\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\i3s\i3s_material_dom.h">
+      <Filter>Header Files\i3s</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -278,9 +323,6 @@
     <ClCompile Include="..\src\utils\utl_zip_archive_impl.cpp">
       <Filter>Source Files\utils</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\utils\json\jsoncpp.cpp">
-      <Filter>Source Files\utils\json</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\utils\dxt\IntelDXTCompressor.cpp">
       <Filter>Source Files\utils\dxt</Filter>
     </ClCompile>
@@ -309,6 +351,33 @@
       <Filter>Source Files\utils</Filter>
     </ClCompile>
     <ClCompile Include="..\src\utils\utl_quaternion.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_libbasis_api.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_gzip_context.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_tree_partition.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_pages_breadthfirst.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_pages_localsubtree.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_envelope.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\i3s\i3s_attribute_buffer_encoder.cpp">
+      <Filter>Source Files\i3s</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_datetime.cpp">
+      <Filter>Source Files\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\utils\utl_slpk_writer_factory.cpp">
       <Filter>Source Files\utils</Filter>
     </ClCompile>
   </ItemGroup>
